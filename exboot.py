@@ -50,9 +50,18 @@ class ExbootApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Exboot — Windows Bootable USB Creator")
-        self.geometry("760x560")
-        self.minsize(680, 500)
+        self.geometry("860x700")
+        self.minsize(760, 620)
         self.resizable(True, True)
+        self.configure(bg="#f3f6fb")
+        style = ttk.Style(self)
+        try:
+            style.theme_use("vista")
+        except tk.TclError:
+            pass
+        style.configure("Card.TLabelframe", padding=12)
+        style.configure("Card.TLabelframe.Label", font=("Segoe UI", 10, "bold"))
+        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"))
         self.disks = []
         self.iso_path = tk.StringVar()
         self.selected_disk = tk.StringVar()
@@ -62,22 +71,20 @@ class ExbootApp(tk.Tk):
         self.refresh_disks()
 
     def build_ui(self):
-        outer = ttk.Frame(self, padding=18)
+        outer = ttk.Frame(self, padding=(20, 18), style="TFrame")
         outer.pack(fill="both", expand=True)
 
-        ttk.Label(outer, text="Exboot", font=("Segoe UI", 22, "bold")).pack(anchor="w")
-        ttk.Label(
-            outer,
-            text="Create Windows installation media from a genuine ISO.",
-            font=("Segoe UI", 10),
-        ).pack(anchor="w", pady=(0, 16))
+        banner = tk.Canvas(outer, height=92, highlightthickness=0, bd=0, bg="#102a43")
+        banner.pack(fill="x", pady=(0, 18))
+        banner.bind("<Configure>", self.draw_banner)
+        self.banner = banner
 
-        iso_frame = ttk.LabelFrame(outer, text="1. Windows ISO", padding=12)
+        iso_frame = ttk.LabelFrame(outer, text="1. Windows ISO", padding=12, style="Card.TLabelframe")
         iso_frame.pack(fill="x", pady=(0, 12))
         ttk.Entry(iso_frame, textvariable=self.iso_path).pack(side="left", fill="x", expand=True)
         ttk.Button(iso_frame, text="Browse…", command=self.choose_iso).pack(side="left", padx=(8, 0))
 
-        disk_frame = ttk.LabelFrame(outer, text="2. Target USB drive", padding=12)
+        disk_frame = ttk.LabelFrame(outer, text="2. Target USB drive", padding=12, style="Card.TLabelframe")
         disk_frame.pack(fill="x", pady=(0, 12))
         self.disk_combo = ttk.Combobox(
             disk_frame, textvariable=self.selected_disk, state="readonly"
@@ -85,7 +92,7 @@ class ExbootApp(tk.Tk):
         self.disk_combo.pack(side="left", fill="x", expand=True)
         ttk.Button(disk_frame, text="Refresh", command=self.refresh_disks).pack(side="left", padx=(8, 0))
 
-        mode_frame = ttk.LabelFrame(outer, text="3. Partition scheme and boot mode", padding=12)
+        mode_frame = ttk.LabelFrame(outer, text="3. Partition scheme and boot mode", padding=12, style="Card.TLabelframe")
         mode_frame.pack(fill="x", pady=(0, 12))
         self.mode_combo = ttk.Combobox(
             mode_frame,
@@ -111,12 +118,12 @@ class ExbootApp(tk.Tk):
         action_frame = ttk.Frame(outer)
         action_frame.pack(fill="x", pady=(0, 12))
         self.create_button = ttk.Button(
-            action_frame, text="Create Bootable USB", command=self.start_creation
+            action_frame, text="Create Bootable USB", command=self.start_creation, style="Accent.TButton"
         )
         self.create_button.pack(side="left")
         ttk.Label(action_frame, textvariable=self.status).pack(side="left", padx=14)
 
-        log_frame = ttk.LabelFrame(outer, text="Progress", padding=8)
+        log_frame = ttk.LabelFrame(outer, text="Progress and activity log", padding=8, style="Card.TLabelframe")
         log_frame.pack(fill="both", expand=True)
         self.log_box = tk.Text(log_frame, height=14, state="disabled", wrap="word", font=("Consolas", 9))
         self.log_box.pack(side="left", fill="both", expand=True)
@@ -129,6 +136,18 @@ class ExbootApp(tk.Tk):
             text="Exboot creates installation media only. It does not activate Windows or bypass licensing.",
             font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(10, 0))
+
+    def draw_banner(self, event=None):
+        width = self.banner.winfo_width()
+        height = self.banner.winfo_height()
+        self.banner.delete("all")
+        self.banner.create_rectangle(0, 0, width, height, fill="#102a43", outline="")
+        self.banner.create_rectangle(0, height - 6, width, height, fill="#2bb3a3", outline="")
+        self.banner.create_oval(width - 150, -90, width + 40, 100, fill="#173f5f", outline="")
+        self.banner.create_oval(width - 95, -50, width + 75, 120, fill="#1c6e8c", outline="")
+        self.banner.create_text(24, 29, anchor="w", text="ENOSX TECHNOLOGIES", fill="#8ee3d5", font=("Segoe UI", 11, "bold"))
+        self.banner.create_text(24, 59, anchor="w", text="Exboot", fill="white", font=("Segoe UI", 24, "bold"))
+        self.banner.create_text(width - 24, 48, anchor="e", text="Windows Bootable USB Creator", fill="#d9eaf7", font=("Segoe UI", 10))
 
     def log(self, text):
         def append():

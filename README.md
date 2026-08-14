@@ -2,6 +2,10 @@
 
 Exboot is a Windows desktop utility for creating bootable Windows installation media from a genuine ISO. It provides a graphical workflow for selecting the ISO, identifying USB disks, choosing a partition and boot mode, confirming the destructive operation, formatting the selected disk, copying installation files, and splitting a large `install.wim` for FAT32 compatibility.
 
+## Enosx Technologies branding
+
+The desktop interface includes an Enosx Technologies banner with the Exboot name, product subtitle, and Enosx color treatment. The branding is implemented directly in the Windows interface so the portable executable does not require a separate image asset.
+
 ## Project files
 
 | File | Purpose |
@@ -41,4 +45,4 @@ The GPT/UEFI option is the default. The MBR/BIOS Legacy option also marks the US
 
 ## Status
 
-This repository contains the first graphical desktop version of Exboot with selectable GPT/UEFI, MBR/UEFI, and MBR/BIOS Legacy media layouts. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.
+This repository contains the Enosx Technologies branded graphical desktop version of Exboot with selectable GPT/UEFI, MBR/UEFI, and MBR/BIOS Legacy media layouts. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.
