@@ -1,0 +1,55 @@
+name: Quality Gates
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  lint:
+    name: Lint Python sources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install linters
+        run: python -m pip install --upgrade ruff
+      - name: Lint main application
+        run: ruff check --select E,F,I001,F821,F841 --ignore E501,BLE001,F401 exboot.py
+      - name: Format check
+        run: ruff format --check exboot.py
+  smoke-test:
+    name: GUI smoke test
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Smoke test the Exboot GUI
+        shell: pwsh
+        run: |
+          # Launch the application headlessly (no display required on Windows),
+          # then immediately close the main window and confirm the process exits cleanly.
+          $job = Start-Process python.exe -ArgumentList "exboot.py", "--smoke-test" -PassThru
+          $timeout = 120
+          $elapsed = 0
+          while (-not $job.HasExited -and $elapsed -lt $timeout) {
+            Start-Sleep -Milliseconds 1000
+            $elapsed++
+          }
+          if (-not $job.HasExited) {
+            Stop-Process $job -Force
+            throw "GUI smoke test failed: the application did not exit within ${timeout} seconds."
+          }
+          if ($job.ExitCode -ne 0) {
+            throw "GUI smoke test failed: the application exited with code $($job.ExitCode)."
+          }
+          Write-Output "GUI smoke test passed."

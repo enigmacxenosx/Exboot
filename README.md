@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, suppresses duplicate automatic notifications during the same session, and opens the official GitHub release page only after the user confirms. It never silently downloads, replaces, or executes an installer.
 
-The current application version is `0.2.0`. Publish future builds with semantic-style tags such as `v0.2.1` or `v0.3.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.3.0`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
 
 ## Appearance customization
 
@@ -26,6 +26,7 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 | `build_installer.ps1` | Builds the executable and packages it with Inno Setup |
 | `installer.iss` | Standard Windows installer definition |
 | `.github/workflows/build-installer.yml` | Builds the installer automatically on Windows and attaches it to tagged GitHub Releases |
+| `.github/workflows/quality-gates.yml` | Runs linting and a headless GUI smoke test on every push and pull request |
 | `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
 | `multiboot_research.md` | Architecture notes and official Ventoy references |
 
@@ -42,11 +43,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.2.0.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.3.0.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.2.0` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.3.0` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 
