@@ -41,8 +41,10 @@ Run `Exboot.exe` as Administrator. Select a genuine Windows ISO, choose the corr
 
 The GPT/UEFI option is the default. The MBR/BIOS Legacy option also marks the USB partition active. Firmware compatibility varies by computer, so choose the option that matches the target system's boot configuration.
 
+Exboot also provides an optional **Bypass Windows 11 TPM and Secure Boot checks** setting. When enabled, it mounts the USB `sources\boot.wim` image and adds `BypassTPMCheck=1` and `BypassSecureBootCheck=1` under the offline Setup `LabConfig` registry key. This setting is disabled by default and should be used only on hardware you own or administer. It does not activate Windows or bypass product-key licensing, and bypassing these checks can reduce hardware-security protections.
+
 > **Important:** Verify the target disk carefully and back up its contents before proceeding. Exboot cannot recover data erased from the selected drive.
 
 ## Status
 
-This repository contains the Enosx Technologies branded graphical desktop version of Exboot with selectable GPT/UEFI, MBR/UEFI, and MBR/BIOS Legacy media layouts. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.
+This repository contains the Enosx Technologies branded graphical desktop version of Exboot with selectable GPT/UEFI, MBR/UEFI, and MBR/BIOS Legacy media layouts, plus an optional TPM and Secure Boot compatibility setting. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.

@@ -66,6 +66,7 @@ class ExbootApp(tk.Tk):
         self.iso_path = tk.StringVar()
         self.selected_disk = tk.StringVar()
         self.partition_mode = tk.StringVar(value="GPT + UEFI")
+        self.bypass_checks = tk.BooleanVar(value=False)
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
@@ -106,6 +107,19 @@ class ExbootApp(tk.Tk):
             text="GPT/UEFI is recommended for modern Windows 11 systems.",
         ).pack(side="left", padx=(12, 0))
 
+        bypass_frame = ttk.LabelFrame(outer, text="4. Optional compatibility settings", padding=12, style="Card.TLabelframe")
+        bypass_frame.pack(fill="x", pady=(0, 12))
+        ttk.Checkbutton(
+            bypass_frame,
+            text="Bypass Windows 11 TPM and Secure Boot checks",
+            variable=self.bypass_checks,
+        ).pack(anchor="w")
+        ttk.Label(
+            bypass_frame,
+            text="Modifies the USB boot image's LabConfig registry. Use only on hardware you own or administer.",
+            foreground="#8a4b00",
+        ).pack(anchor="w", pady=(5, 0))
+
         warning = ttk.Label(
             outer,
             text="WARNING: The selected USB drive will be erased completely. Verify the disk carefully.",
@@ -136,6 +150,54 @@ class ExbootApp(tk.Tk):
             text="Exboot creates installation media only. It does not activate Windows or bypass licensing.",
             font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(10, 0))
+
+    def apply_labconfig_bypass(self, usb_drive):
+        boot_wim = os.path.join(usb_drive + "\\", "sources", "boot.wim")
+        if not os.path.exists(boot_wim):
+            raise RuntimeError("Cannot enable the bypass: sources\\boot.wim was not found on the USB.")
+        mount_dir = tempfile.mkdtemp(prefix="exboot_bootwim_")
+        mounted = False
+        hive_loaded = False
+        try:
+            self.log("Applying TPM and Secure Boot LabConfig values to boot.wim…")
+            mount_result = run_command(
+                ["dism.exe", "/Mount-Image", f"/ImageFile:{boot_wim}", "/Index:2", f"/MountDir:{mount_dir}"],
+                check=False,
+            )
+            if mount_result.returncode != 0:
+                raise RuntimeError(mount_result.stdout + mount_result.stderr)
+            mounted = True
+            hive_path = os.path.join(mount_dir, "Windows", "System32", "Config", "SYSTEM")
+            load_result = run_command(["reg.exe", "load", r"HKLM\ExbootLabConfig", hive_path], check=False)
+            if load_result.returncode != 0:
+                raise RuntimeError(load_result.stdout + load_result.stderr)
+            hive_loaded = True
+            for value in ("BypassTPMCheck", "BypassSecureBootCheck"):
+                add_result = run_command(
+                    ["reg.exe", "add", r"HKLM\ExbootLabConfig\Setup\LabConfig", "/v", value, "/t", "REG_DWORD", "/d", "1", "/f"],
+                    check=False,
+                )
+                if add_result.returncode != 0:
+                    raise RuntimeError(add_result.stdout + add_result.stderr)
+            run_command(["reg.exe", "unload", r"HKLM\ExbootLabConfig"], check=False)
+            hive_loaded = False
+            commit_result = run_command(
+                ["dism.exe", "/Unmount-Image", f"/MountDir:{mount_dir}", "/Commit"],
+                check=False,
+            )
+            mounted = False
+            if commit_result.returncode != 0:
+                raise RuntimeError(commit_result.stdout + commit_result.stderr)
+            self.log("TPM and Secure Boot bypass values applied successfully.")
+        finally:
+            if hive_loaded:
+                run_command(["reg.exe", "unload", r"HKLM\ExbootLabConfig"], check=False)
+            if mounted:
+                run_command(["dism.exe", "/Unmount-Image", f"/MountDir:{mount_dir}", "/Discard"], check=False)
+            try:
+                os.rmdir(mount_dir)
+            except OSError:
+                pass
 
     def draw_banner(self, event=None):
         width = self.banner.winfo_width()
@@ -211,7 +273,7 @@ class ExbootApp(tk.Tk):
         disk_name = self.disk_combo.get()
         confirmed = messagebox.askyesno(
             "Confirm erase",
-            f"Exboot will erase ALL data on:\n\n{disk_name}\n\nSelected mode: {self.partition_mode.get()}\n\nDo you want to continue?",
+            f"Exboot will erase ALL data on:\n\n{disk_name}\n\nSelected mode: {self.partition_mode.get()}\nTPM/Secure Boot bypass: {'ON' if self.bypass_checks.get() else 'OFF'}\n\nDo you want to continue?",
             icon="warning",
         )
         if not confirmed:
@@ -226,11 +288,11 @@ class ExbootApp(tk.Tk):
         self.status.set("Working…")
         threading.Thread(
             target=self.create_media,
-            args=(iso, disk_number, self.partition_mode.get()),
+            args=(iso, disk_number, self.partition_mode.get(), self.bypass_checks.get()),
             daemon=True,
         ).start()
 
-    def create_media(self, iso, disk_number, mode):
+    def create_media(self, iso, disk_number, mode, bypass_checks):
         mounted = False
         iso_drive = None
         try:
@@ -306,6 +368,9 @@ class ExbootApp(tk.Tk):
                 with open(source, "rb") as src, open(target, "wb") as dst:
                     while chunk := src.read(1024 * 1024):
                         dst.write(chunk)
+
+            if bypass_checks:
+                self.apply_labconfig_bypass(usb_drive)
 
             if mode == "MBR + BIOS / Legacy":
                 self.log("Marking the MBR USB partition active for BIOS/Legacy boot…")
