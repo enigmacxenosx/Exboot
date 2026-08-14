@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
 
-The current application version is `0.1.5`. Publish future builds with semantic-style tags such as `v0.1.6` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.1.6`. Publish future builds with semantic-style tags such as `v0.1.7` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
 
 ## Appearance customization
 
@@ -27,6 +27,7 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 | `installer.iss` | Standard Windows installer definition |
 | `.github/workflows/build-installer.yml` | Builds the installer automatically on Windows and attaches it to tagged GitHub Releases |
 | `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
+| `multiboot_research.md` | Architecture notes and official Ventoy references |
 
 ## Requirements
 
@@ -41,11 +42,19 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.1.5.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.1.6.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.1.5` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.1.6` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+
+## Multi-boot USB mode
+
+Select **Multi-boot USB (Ventoy)** from the Creation mode control to place multiple operating-system images on one USB. Add ISO, WIM, IMG, VHD, or VHDX files, select the target USB disk, and confirm the two-step erase warning. Exboot downloads the latest official Ventoy Windows package from the Ventoy GitHub Releases endpoint, verifies its SHA-256 checksum from the accompanying `sha256.txt`, installs Ventoy in GPT mode through the documented Windows CLI, and copies the selected image files into an `Exboot Images` folder on the Ventoy data partition. Ventoy then discovers the files and presents them in its boot menu at startup.
+
+Multi-boot mode is intentionally separate from the single Windows installer mode. The Ventoy installation formats the selected USB disk and erases all existing data. Only use it with a USB drive you have backed up and verified by disk number, model, and capacity. Exboot does not silently download or install images, and it does not bypass operating-system licensing.
+
+Exboot uses the official Ventoy Windows release package for the multi-boot engine. Ventoy is an open-source project distributed under GPL-3.0. Exboot downloads the package from the official Ventoy GitHub Releases endpoint at runtime and verifies its published SHA-256 checksum before invoking `Ventoy2Disk.exe`. See the [Ventoy project](https://github.com/ventoy/Ventoy), the [Ventoy startup guide](https://www.ventoy.net/en/doc_start.html), and the [Ventoy Windows CLI documentation](https://www.ventoy.net/en/doc_windows_cli.html) for details.
 
 ## Using Exboot
 

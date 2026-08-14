@@ -1,20 +1,25 @@
 import ctypes
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import time
 import tempfile
 import threading
 import urllib.error
 import urllib.request
 import webbrowser
+import zipfile
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.5"
+APP_VERSION = "0.1.6"
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
+VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/latest"
 
 
 def run_command(args, check=True, capture=True):
@@ -69,6 +74,8 @@ class ExbootApp(tk.Tk):
         self.selected_disk = tk.StringVar()
         self.partition_mode = tk.StringVar(value="GPT + UEFI")
         self.bypass_checks = tk.BooleanVar(value=False)
+        self.media_mode = tk.StringVar(value="Single Windows installer")
+        self.multi_iso_paths = []
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
@@ -83,8 +90,21 @@ class ExbootApp(tk.Tk):
         banner.bind("<Configure>", self.draw_banner)
         self.banner = banner
 
+        media_mode_frame = ttk.LabelFrame(outer, text="Creation mode", padding=12, style="Card.TLabelframe")
+        media_mode_frame.pack(fill="x", pady=(0, 12))
+        self.media_mode_combo = ttk.Combobox(
+            media_mode_frame,
+            textvariable=self.media_mode,
+            state="readonly",
+            values=("Single Windows installer", "Multi-boot USB (Ventoy)"),
+        )
+        self.media_mode_combo.pack(side="left", fill="x", expand=True)
+        self.media_mode_combo.bind("<<ComboboxSelected>>", lambda event: self.toggle_media_mode())
+        ttk.Label(media_mode_frame, text="Multi-boot mode supports multiple ISO/WIM/IMG/VHD files.").pack(side="left", padx=(12, 0))
+
         iso_frame = ttk.LabelFrame(outer, text="1. Windows ISO", padding=12, style="Card.TLabelframe")
         iso_frame.pack(fill="x", pady=(0, 12))
+        self.iso_frame = iso_frame
         ttk.Entry(iso_frame, textvariable=self.iso_path).pack(side="left", fill="x", expand=True)
         ttk.Button(iso_frame, text="Browse…", command=self.choose_iso).pack(side="left", padx=(8, 0))
 
@@ -98,6 +118,7 @@ class ExbootApp(tk.Tk):
 
         mode_frame = ttk.LabelFrame(outer, text="3. Partition scheme and boot mode", padding=12, style="Card.TLabelframe")
         mode_frame.pack(fill="x", pady=(0, 12))
+        self.mode_frame = mode_frame
         self.mode_combo = ttk.Combobox(
             mode_frame,
             textvariable=self.partition_mode,
@@ -112,6 +133,7 @@ class ExbootApp(tk.Tk):
 
         bypass_frame = ttk.LabelFrame(outer, text="4. Optional compatibility settings", padding=12, style="Card.TLabelframe")
         bypass_frame.pack(fill="x", pady=(0, 12))
+        self.bypass_frame = bypass_frame
         ttk.Checkbutton(
             bypass_frame,
             text="Bypass Windows 11 TPM and Secure Boot checks",
@@ -122,6 +144,17 @@ class ExbootApp(tk.Tk):
             text="Modifies the USB boot image's LabConfig registry. Use only on hardware you own or administer.",
             foreground="#8a4b00",
         ).pack(anchor="w", pady=(5, 0))
+
+        multi_frame = ttk.LabelFrame(outer, text="4. Multi-boot images", padding=12, style="Card.TLabelframe")
+        self.multi_frame = multi_frame
+        multi_frame.pack(fill="x", pady=(0, 12))
+        self.multi_list = tk.Listbox(multi_frame, height=5, selectmode=tk.EXTENDED, relief="flat", borderwidth=0)
+        self.multi_list.pack(side="left", fill="both", expand=True)
+        multi_buttons = ttk.Frame(multi_frame)
+        multi_buttons.pack(side="left", padx=(10, 0), fill="y")
+        ttk.Button(multi_buttons, text="Add ISO files…", command=self.add_multi_isos).pack(fill="x")
+        ttk.Button(multi_buttons, text="Remove selected", command=self.remove_multi_isos).pack(fill="x", pady=(8, 0))
+        ttk.Label(multi_frame, text="Ventoy creates the boot menu automatically from the files copied to the USB.").pack(anchor="w", pady=(8, 0))
 
         self.warning_label = ttk.Label(
             outer,
@@ -156,6 +189,7 @@ class ExbootApp(tk.Tk):
             font=("Segoe UI", 8),
         )
         self.footer_label.pack(anchor="w", pady=(10, 0))
+        self.toggle_media_mode()
 
     def load_appearance_settings(self):
         try:
@@ -373,6 +407,158 @@ class ExbootApp(tk.Tk):
         if path:
             self.iso_path.set(path)
 
+    def toggle_media_mode(self):
+        multi = self.media_mode.get() == "Multi-boot USB (Ventoy)"
+        if multi:
+            self.iso_frame.pack_forget()
+            self.mode_frame.pack_forget()
+            self.bypass_frame.pack_forget()
+            self.multi_frame.pack(fill="x", pady=(0, 12), before=self.warning_label)
+        else:
+            self.multi_frame.pack_forget()
+            self.iso_frame.pack(fill="x", pady=(0, 12), before=self.disk_frame)
+            self.mode_frame.pack(fill="x", pady=(0, 12), before=self.bypass_frame)
+            self.bypass_frame.pack(fill="x", pady=(0, 12), before=self.multi_frame)
+
+    def add_multi_isos(self):
+        paths = filedialog.askopenfilenames(
+            title="Select operating-system image files",
+            filetypes=[
+                ("Boot images", "*.iso *.wim *.img *.vhd *.vhdx"),
+                ("ISO images", "*.iso"),
+                ("All files", "*.*"),
+            ],
+        )
+        for path in paths:
+            if path not in self.multi_iso_paths:
+                self.multi_iso_paths.append(path)
+                self.multi_list.insert("end", path)
+        if paths:
+            self.log(f"Selected {len(self.multi_iso_paths)} multi-boot image(s).")
+
+    def remove_multi_isos(self):
+        selected = list(self.multi_list.curselection())
+        for index in reversed(selected):
+            self.multi_list.delete(index)
+            del self.multi_iso_paths[index]
+
+    def start_multiboot_creation(self):
+        if not is_admin():
+            messagebox.showerror("Administrator required", "Run Exboot as Administrator before creating multi-boot media.")
+            return
+        index = self.disk_combo.current()
+        if not self.multi_iso_paths:
+            messagebox.showerror("Images required", "Add at least one OS image file first.")
+            return
+        invalid = [path for path in self.multi_iso_paths if not Path(path).is_file()]
+        if invalid:
+            messagebox.showerror("Missing image", f"These image files are unavailable:\n\n{invalid[0]}")
+            return
+        if index < 0 or index >= len(self.disks):
+            messagebox.showerror("USB required", "Select a detected USB disk first.")
+            return
+        disk_number = str(self.disks[index].get("Number"))
+        disk_name = self.disk_combo.get()
+        confirmed = messagebox.askyesno(
+            "Confirm multi-boot erase",
+            f"Exboot will install Ventoy and erase ALL data on:\n\n{disk_name}\n\n"
+            f"The boot menu will contain {len(self.multi_iso_paths)} image(s).\n\nDo you want to continue?",
+            icon="warning",
+        )
+        if not confirmed:
+            return
+        typed = simpledialog.askstring(
+            "Final confirmation", "Type ERASE to confirm that the selected USB disk may be erased:"
+        )
+        if typed != "ERASE":
+            self.log("Multi-boot operation cancelled: confirmation text did not match.")
+            return
+        self.create_button.configure(state="disabled")
+        self.status.set("Working…")
+        threading.Thread(
+            target=self.create_multiboot_media,
+            args=(list(self.multi_iso_paths), disk_number),
+            daemon=True,
+        ).start()
+
+    def download_latest_ventoy(self, destination):
+        request = urllib.request.Request(
+            VENTOY_RELEASES_URL,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "Exboot-MultiBoot"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            release = json.loads(response.read().decode("utf-8"))
+        assets = {item.get("name"): item.get("browser_download_url") for item in release.get("assets", [])}
+        package_name = next((name for name in assets if name.endswith("-windows.zip")), None)
+        checksum_name = "sha256.txt"
+        if not package_name or not assets.get(checksum_name):
+            raise RuntimeError("The latest official Ventoy release does not contain the expected Windows package.")
+        package_path = Path(destination) / package_name
+        checksum_path = Path(destination) / checksum_name
+        self.log(f"Downloading official Ventoy {release.get('tag_name', '')} package…")
+        with urllib.request.urlopen(assets[package_name], timeout=120) as source, package_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+        with urllib.request.urlopen(assets[checksum_name], timeout=30) as source, checksum_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+        expected = None
+        for line in checksum_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[-1].strip("*") == package_name:
+                expected = fields[0].lower()
+                break
+        if not expected:
+            raise RuntimeError("Could not find the Ventoy package checksum.")
+        digest = hashlib.sha256(package_path.read_bytes()).hexdigest().lower()
+        if digest != expected:
+            raise RuntimeError("Ventoy package checksum verification failed; the download was discarded.")
+        return package_path
+
+    def find_ventoy_data_drive(self, disk_number):
+        for _ in range(20):
+            result = ps(
+                f"(Get-Partition -DiskNumber {disk_number} | Get-Volume | "
+                "Where-Object {$_.DriveLetter} | Sort-Object Size -Descending | "
+                "Select-Object -First 1 -ExpandProperty DriveLetter)"
+            )
+            letters = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            if letters:
+                return letters[0] + ":"
+            time.sleep(2)
+        raise RuntimeError("Ventoy installed, but Windows did not assign a data-partition drive letter.")
+
+    def create_multiboot_media(self, image_paths, disk_number):
+        try:
+            with tempfile.TemporaryDirectory(prefix="exboot_ventoy_") as workspace:
+                package_path = self.download_latest_ventoy(workspace)
+                extract_dir = Path(workspace) / "ventoy"
+                with zipfile.ZipFile(package_path) as archive:
+                    archive.extractall(extract_dir)
+                ventoy_exe = next(extract_dir.rglob("Ventoy2Disk.exe"), None)
+                if not ventoy_exe:
+                    raise RuntimeError("Ventoy2Disk.exe was not found in the verified package.")
+                self.log(f"Installing Ventoy to physical USB disk {disk_number} using GPT mode…")
+                result = run_command(
+                    [str(ventoy_exe), "VTOYCLI", "/I", f"/PhyDrive:{disk_number}", "/GPT"],
+                    check=False,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(result.stdout + result.stderr)
+                usb_drive = self.find_ventoy_data_drive(disk_number)
+                image_dir = Path(usb_drive + "\\") / "Exboot Images"
+                image_dir.mkdir(parents=True, exist_ok=True)
+                for position, source in enumerate(image_paths, start=1):
+                    target = image_dir / Path(source).name
+                    self.log(f"Copying image {position}/{len(image_paths)}: {Path(source).name}")
+                    shutil.copy2(source, target)
+                self.log("Ventoy will discover the copied images and display them in its boot menu.")
+            self.after(0, lambda: messagebox.showinfo("Exboot", "Multi-boot USB creation completed."))
+        except Exception as exc:
+            self.log(f"ERROR: {exc}")
+            self.after(0, lambda: messagebox.showerror("Exboot multi-boot failed", str(exc)))
+        finally:
+            self.after(0, lambda: self.create_button.configure(state="normal"))
+            self.after(0, lambda: self.status.set("Ready"))
+
     def refresh_disks(self):
         try:
             command = (
@@ -403,6 +589,9 @@ class ExbootApp(tk.Tk):
             self.log(f"Could not enumerate USB disks: {exc}")
 
     def start_creation(self):
+        if self.media_mode.get() == "Multi-boot USB (Ventoy)":
+            self.start_multiboot_creation()
+            return
         if not is_admin():
             messagebox.showerror("Administrator required", "Run Exboot as Administrator before creating USB media.")
             return
