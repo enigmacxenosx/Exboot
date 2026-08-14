@@ -6,7 +6,15 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, suppresses duplicate automatic notifications during the same session, and opens the official GitHub release page only after the user confirms. It never silently downloads, replaces, or executes an installer.
 
-The current application version is `0.3.0`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.3.1`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+
+## Version 0.3.1
+
+Version 0.3.1 extends multi-boot mode with **Linux and other non-Windows image support**. Ventoy-compatible live ISOs such as Ubuntu-family `casper` images and other distributions, diagnostic media, and IMG files can now be added alongside Windows installers. Each image's detected family is shown in the multi-boot image list and the activity log, and the selection label reflects mixed Windows and Linux content.
+
+The release also adds **image freshness detection**. When a Windows ISO or WIM/ESD file is selected, Exboot reads the build timestamp and WIM header version directly from `install.wim` or `install.esd` inside the image and displays the build date with a Fresh / Dated / Outdated assessment in the ISO panel and the activity log. Non-Windows media keep the panel silent so the label never shows placeholder text.
+
+Image classification and freshness parsing are covered by unit tests in `tests_freshness.py`, which run together with the lint and GUI smoke-test gates defined in `.github/workflows/quality-gates.yml`.
 
 ## Appearance customization
 
@@ -29,6 +37,7 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 | `.github/workflows/quality-gates.yml` | Runs linting and a headless GUI smoke test on every push and pull request |
 | `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
 | `multiboot_research.md` | Architecture notes and official Ventoy references |
+| `tests_freshness.py` | Unit tests for image classification and Windows build freshness detection |
 
 ## Requirements
 
@@ -43,11 +52,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.3.0.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.3.1.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.3.0` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.3.1` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 

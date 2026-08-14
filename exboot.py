@@ -14,11 +14,12 @@ import urllib.error
 import urllib.request
 import webbrowser
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -89,6 +90,7 @@ class ExbootApp(tk.Tk):
         self.apply_theme()
         self.disks = []
         self.iso_path = tk.StringVar()
+        self.image_freshness = tk.StringVar(value="")
         self.selected_disk = tk.StringVar()
         self.partition_mode = tk.StringVar(value="GPT + UEFI")
         self.bypass_checks = tk.BooleanVar(value=False)
@@ -159,6 +161,7 @@ class ExbootApp(tk.Tk):
         ttk.Button(iso_frame, text="Browse…", command=self.choose_iso).pack(
             side="left", padx=(8, 0)
         )
+        ttk.Label(iso_frame, textvariable=self.image_freshness, foreground="#7a8aa0")
 
         checksum_frame = ttk.LabelFrame(
             outer, text="Integrity verification", padding=12, style="Card.TLabelframe"
@@ -714,6 +717,7 @@ class ExbootApp(tk.Tk):
             self.iso_path.set(path)
             self.verification_signature = None
             self.checksum_status.set("Not verified")
+            self.update_image_freshness(path)
 
     def choose_checksum_file(self):
         path = filedialog.askopenfilename(
@@ -992,11 +996,149 @@ class ExbootApp(tk.Tk):
             self.pack_before(self.mode_frame, self.bypass_frame)
             self.pack_before(self.bypass_frame, self.multi_frame)
 
+    @staticmethod
+    def _read_wim_timestamp(header):
+        """Convert the creation timestamp stored at WIM header offset 68 to a
+        UTC datetime. The value is a Windows FILETIME (100-nanosecond intervals
+        since 1601-01-01). Returns None when the value is missing or invalid."""
+        if len(header) < 76:
+            return None
+        raw = int.from_bytes(header[68:76], "little")
+        if raw == 0:
+            return None
+        windows_epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+        try:
+            return windows_epoch + timedelta(microseconds=raw // 10)
+        except (OverflowError, ValueError):
+            return None
+
+    @staticmethod
+    def detect_windows_image(path):
+        """Inspect a Windows installation image for build metadata (freshness).
+
+        Reads the WIM header of install.wim/install.esd (or the file itself when
+        it is a bare WIM/ESD) and returns the creation timestamp plus the header
+        version. ESD files are LZMS-compressed but share the same header layout
+        as WIM, so the timestamp can be read directly from the first block.
+        Returns a dict with keys timestamp, wim_version, and label, or None
+        when the image is not a readable Windows WIM/ESD.
+        """
+        path = str(path)
+        suffix = Path(path).suffix.lower()
+        header = None
+        if suffix in (".wim", ".esd"):
+            try:
+                header = Path(path).read_bytes()[:4096]
+            except OSError:
+                return None
+        elif suffix == ".iso":
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    target = next(
+                        (
+                            entry
+                            for entry in archive.namelist()
+                            if entry.lower() in ("install.wim", "install.esd")
+                        ),
+                        None,
+                    )
+                    if target:
+                        with archive.open(target) as entry_file:
+                            header = entry_file.read(4096)
+            except (zipfile.BadZipFile, OSError):
+                return None
+        if header is None or len(header) < 12:
+            return None
+        if header[:5] != b"MSWIM":
+            return None
+        wim_version = (
+            int.from_bytes(header[64:68], "little") if len(header) >= 68 else 0
+        )
+        timestamp = ExbootApp._read_wim_timestamp(header)
+        return {"wim_version": wim_version, "timestamp": timestamp}
+
+    def update_image_freshness(self, path):
+        """Inspect the selected image and show its Windows build freshness.
+
+        Windows images show the install.wim/install.esd build date and header
+        version; non-Windows images stay silent so the label never shows
+        placeholder text for Linux or other media."""
+        self.image_freshness.set("")
+        if not Path(str(path)).is_file():
+            return
+        meta = self.detect_windows_image(path)
+        label = self.freshness_label(meta) if meta else None
+        if label:
+            self.image_freshness.set(f"{label}")
+        else:
+            classification = self.classify_image(path)
+            if classification.startswith("Linux") or classification.startswith("Other"):
+                self.image_freshness.set(
+                    "Non-Windows image — Ventoy multi-boot supported"
+                )
+
+    def classify_image(path):
+        """Return a human-readable operating-system family label for an image file.
+
+        Windows images are recognized by the presence of install.wim/install.esd
+        or sources/boot.wim inside the ISO. Everything else that Ventoy supports
+        (Linux live ISOs, diagnostic images, and so on) is labeled Other/Linux.
+        Detection failures return "Unknown" so classification never blocks use.
+        """
+        path = str(path)
+        suffix = Path(path).suffix.lower()
+        name = Path(path).name.lower()
+        if suffix in (".wim", ".esd"):
+            return "Windows (WIM/ESD)"
+        if suffix in (".vhd", ".vhdx"):
+            return "Windows (VHD/VHDX)"
+        if suffix == ".iso":
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    entries = [entry.lower() for entry in archive.namelist()]
+            except (zipfile.BadZipFile, OSError):
+                return "Other / Linux"
+            if any(
+                entry in ("install.wim", "install.esd") or entry.startswith("sources/")
+                for entry in entries
+            ):
+                return "Windows"
+            if any(entry.startswith("casper/") for entry in entries):
+                return "Linux (Ubuntu family)"
+            return "Other / Linux"
+        if suffix == ".img":
+            return (
+                "Other / Linux"
+                if "raspbian" in name or "linux" in name
+                else "IMG image"
+            )
+        return "Unknown"
+
+    @staticmethod
+    def freshness_label(meta, stale_days=730):
+        """Format image metadata into a short freshness label for the UI.
+
+        Returns None when no metadata is available so the UI can stay silent
+        instead of showing placeholder text.
+        """
+        if not meta or not meta.get("timestamp"):
+            return None
+        stamp = meta["timestamp"].strftime("%Y-%m-%d")
+        age = (datetime.now(timezone.utc) - meta["timestamp"]).days
+        if age < 0:
+            age = 0
+        state = "Fresh" if age < 180 else "Dated" if age < stale_days else "Outdated"
+        version = meta.get("wim_version") or 0
+        return f"Built {stamp} ({state}, {age} days old) · WIM version {version}"
+
     def add_multi_isos(self):
         paths = filedialog.askopenfilenames(
             title="Select operating-system image files",
             filetypes=[
-                ("Boot images", "*.iso *.wim *.img *.vhd *.vhdx"),
+                (
+                    "Boot images",
+                    "*.iso *.wim *.esd *.img *.vhd *.vhdx",
+                ),
                 ("ISO images", "*.iso"),
                 ("All files", "*.*"),
             ],
@@ -1004,11 +1146,20 @@ class ExbootApp(tk.Tk):
         for path in paths:
             if path not in self.multi_iso_paths:
                 self.multi_iso_paths.append(path)
-                self.multi_list.insert("end", path)
+        self.refresh_multi_list()
         if paths:
+            families = [self.classify_image(path) for path in paths]
+            summary = ", ".join(dict.fromkeys(families))
+            self.log(
+                f"Selected {len(self.multi_iso_paths)} multi-boot image(s): {summary}."
+            )
+            for path in paths:
+                meta = self.detect_windows_image(path)
+                label = self.freshness_label(meta)
+                if label:
+                    self.log(f"{Path(path).name}: {label}")
             self.verification_signature = None
             self.checksum_status.set("Not verified")
-            self.log(f"Selected {len(self.multi_iso_paths)} multi-boot image(s).")
 
     def show_multiboot_theme_settings(self):
         dialog = tk.Toplevel(self)
@@ -1086,11 +1237,20 @@ class ExbootApp(tk.Tk):
             anchor="e", pady=(18, 0)
         )
 
+    def refresh_multi_list(self):
+        """Rebuild the multi-boot image list so each entry shows the image path
+        plus its detected operating-system family, keeping list indices aligned
+        with multi_iso_paths after any add or remove."""
+        self.multi_list.delete(0, "end")
+        for path in self.multi_iso_paths:
+            family = self.classify_image(path)
+            self.multi_list.insert("end", f"{path}   [{family}]")
+
     def remove_multi_isos(self):
         selected = list(self.multi_list.curselection())
         for index in reversed(selected):
-            self.multi_list.delete(index)
             del self.multi_iso_paths[index]
+        self.refresh_multi_list()
         self.verification_signature = None
         self.checksum_status.set("Not verified")
 

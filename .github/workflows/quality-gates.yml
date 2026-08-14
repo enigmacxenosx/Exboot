@@ -23,6 +23,8 @@ jobs:
         run: ruff check --select E,F,I001,F821,F841 --ignore E501,BLE001,F401 exboot.py
       - name: Format check
         run: ruff format --check exboot.py
+      - name: Run image classification and freshness tests
+        run: python tests_freshness.py
   smoke-test:
     name: GUI smoke test
     runs-on: windows-latest
