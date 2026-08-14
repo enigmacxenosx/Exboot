@@ -17,7 +17,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.6"
+APP_VERSION = "0.1.7"
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/latest"
 
@@ -76,6 +76,14 @@ class ExbootApp(tk.Tk):
         self.bypass_checks = tk.BooleanVar(value=False)
         self.media_mode = tk.StringVar(value="Single Windows installer")
         self.multi_iso_paths = []
+        self.theme_settings = {
+            "title": "Enosx Technologies Exboot",
+            "background": "",
+            "background_color": "#061426",
+            "text_color": "#dcecff",
+            "selected_color": "#00d8ff",
+            "version_color": "#7aa7d9",
+        }
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
@@ -154,6 +162,7 @@ class ExbootApp(tk.Tk):
         multi_buttons.pack(side="left", padx=(10, 0), fill="y")
         ttk.Button(multi_buttons, text="Add ISO files…", command=self.add_multi_isos).pack(fill="x")
         ttk.Button(multi_buttons, text="Remove selected", command=self.remove_multi_isos).pack(fill="x", pady=(8, 0))
+        ttk.Button(multi_buttons, text="Theme settings…", command=self.show_multiboot_theme_settings).pack(fill="x", pady=(8, 0))
         ttk.Label(multi_frame, text="Ventoy creates the boot menu automatically from the files copied to the USB.").pack(anchor="w", pady=(8, 0))
 
         self.warning_label = ttk.Label(
@@ -436,6 +445,59 @@ class ExbootApp(tk.Tk):
         if paths:
             self.log(f"Selected {len(self.multi_iso_paths)} multi-boot image(s).")
 
+    def show_multiboot_theme_settings(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Multi-boot menu theme")
+        dialog.transient(self)
+        dialog.resizable(False, False)
+        frame = ttk.Frame(dialog, padding=18)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Ventoy / GRUB menu theme", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="These settings are written to the USB only when multi-boot media is created.").pack(anchor="w", pady=(0, 14))
+        title_var = tk.StringVar(value=self.theme_settings["title"])
+        ttk.Label(frame, text="Menu title").pack(anchor="w")
+        ttk.Entry(frame, textvariable=title_var, width=52).pack(fill="x", pady=(3, 10))
+        background_var = tk.StringVar(value=self.theme_settings["background"] or "No background image selected")
+        ttk.Label(frame, textvariable=background_var).pack(anchor="w", pady=(0, 4))
+
+        def choose_background():
+            path = filedialog.askopenfilename(
+                title="Choose multi-boot background image",
+                filetypes=[("PNG or JPEG images", "*.png *.jpg *.jpeg"), ("All files", "*.*")],
+            )
+            if path:
+                self.theme_settings["background"] = path
+                background_var.set(path)
+
+        ttk.Button(frame, text="Choose background image…", command=choose_background).pack(anchor="w")
+        color_frame = ttk.Frame(frame)
+        color_frame.pack(fill="x", pady=(14, 0))
+        color_vars = {
+            "background_color": ("Background color", "#061426"),
+            "text_color": ("Menu text color", "#dcecff"),
+            "selected_color": ("Selected item color", "#00d8ff"),
+            "version_color": ("Version text color", "#7aa7d9"),
+        }
+        for key, (label, _) in color_vars.items():
+            row = ttk.Frame(color_frame)
+            row.pack(fill="x", pady=3)
+            ttk.Label(row, text=f"{label}:", width=22).pack(side="left")
+            swatch = tk.Label(row, width=4, bg=self.theme_settings[key], relief="solid", bd=1)
+            swatch.pack(side="left", padx=(4, 8))
+            def choose_color(setting_key=key, preview=swatch):
+                selected = colorchooser.askcolor(color=self.theme_settings[setting_key], title=f"Choose {color_vars[setting_key][0]}")[1]
+                if selected:
+                    self.theme_settings[setting_key] = selected
+                    preview.configure(bg=selected)
+            ttk.Button(row, text="Choose…", command=choose_color).pack(side="left")
+
+        def save_and_close():
+            self.theme_settings["title"] = title_var.get().strip() or "Enosx Technologies Exboot"
+            self.log("Multi-boot theme settings updated.")
+            dialog.destroy()
+
+        ttk.Button(frame, text="Save theme settings", command=save_and_close).pack(anchor="e", pady=(18, 0))
+
     def remove_multi_isos(self):
         selected = list(self.multi_list.curselection())
         for index in reversed(selected):
@@ -548,9 +610,12 @@ class ExbootApp(tk.Tk):
                 image_dir.mkdir(parents=True, exist_ok=True)
                 for position, source in enumerate(image_paths, start=1):
                     target = image_dir / Path(source).name
+                    if target.exists():
+                        target = image_dir / f"{Path(source).stem}_{position}{Path(source).suffix}"
                     self.log(f"Copying image {position}/{len(image_paths)}: {Path(source).name}")
                     shutil.copy2(source, target)
-                self.log("Ventoy will discover the copied images and display them in its boot menu.")
+                self.write_ventoy_theme(usb_drive, self.theme_settings)
+                self.log("Ventoy will discover the copied images and display them in the styled boot menu.")
             self.after(0, lambda: messagebox.showinfo("Exboot", "Multi-boot USB creation completed."))
         except Exception as exc:
             self.log(f"ERROR: {exc}")
@@ -558,6 +623,55 @@ class ExbootApp(tk.Tk):
         finally:
             self.after(0, lambda: self.create_button.configure(state="normal"))
             self.after(0, lambda: self.status.set("Ready"))
+
+    def write_ventoy_theme(self, usb_drive, settings):
+        ventoy_root = Path(usb_drive + "\\") / "ventoy"
+        theme_dir = ventoy_root / "theme" / "exboot"
+        theme_dir.mkdir(parents=True, exist_ok=True)
+        background_name = ""
+        background = settings.get("background")
+        if background and Path(background).is_file():
+            suffix = Path(background).suffix.lower()
+            if suffix not in (".png", ".jpg", ".jpeg"):
+                raise RuntimeError("The multi-boot background must be a PNG or JPEG image.")
+            background_name = "background" + suffix
+            shutil.copy2(background, theme_dir / background_name)
+        theme_lines = [
+            f'desktop-color: "{settings.get("background_color", "#061426")}"',
+            f'title-text: "{settings.get("title") or "Enosx Technologies Exboot"}"',
+            'title-font: "DejaVu Sans Bold 28"',
+            f'title-color: "{settings.get("selected_color", "#00d8ff")}"',
+            'title-position: "center"',
+            '+ boot_menu {',
+            '    left = 18%',
+            '    top = 27%',
+            '    width = 64%',
+            '    height = 55%',
+            '    item_font = "DejaVu Sans 18"',
+            f'    item_color = "{settings.get("text_color", "#dcecff")}"',
+            f'    selected_item_color = "{settings.get("selected_color", "#00d8ff")}"',
+            '    item_height = 38',
+            '    item_padding = 10',
+            '    item_spacing = 6',
+            '}',
+            '+ label {',
+            '    id = "ventoy_version"',
+            '    left = 3%',
+            '    top = 94%',
+            '    width = 94%',
+            '    height = 30',
+            '    text = "${VTLANG}"',
+            '    align = "left"',
+            f'    color = "{settings.get("version_color", "#7aa7d9")}"',
+            '    font = "DejaVu Sans 12"',
+            '}',
+        ]
+        if background_name:
+            theme_lines.insert(0, f'desktop-image: "{background_name}"')
+        (theme_dir / "theme.txt").write_text("\n".join(theme_lines) + "\n", encoding="utf-8")
+        ventoy_json = {"theme": {"file": "/ventoy/theme/exboot/theme.txt"}}
+        (ventoy_root / "ventoy.json").write_text(json.dumps(ventoy_json, indent=2), encoding="utf-8")
+        self.log("Custom GRUB/Ventoy theme configuration written to the USB.")
 
     def refresh_disks(self):
         try:

@@ -14,3 +14,8 @@ Recommended Exboot architecture: provide a Multi-boot mode that selects multiple
 The official Windows CLI documentation specifies the command format `Ventoy2Disk.exe VTOYCLI CMD DISK [Options]`, where CMD is `/I` for install or `/U` for update, and the physical disk can be specified with `/PhyDrive:N`. It supports `/GPT` for GPT partition style, `/NOSB` to disable Ventoy Secure Boot Support, `/VTOYALIGN`, `/R:XXX`, `/FS:XXX`, and `/NonDest`. Exboot should use `/I /PhyDrive:<disk_number> /GPT` for its default multi-boot install, keep Secure Boot support enabled unless the user explicitly chooses otherwise, and require the final erase confirmation before invoking Ventoy.
 
 Source: https://www.ventoy.net/en/doc_windows_cli.html
+
+
+Ventoy’s official theme plugin supports a `theme` object in `ventoy.json` whose `file` field points to a GRUB `theme.txt`, for example `/ventoy/theme/blur/theme.txt`. The theme folder can contain the theme definition and referenced background/image assets. Ventoy is GRUB2-based, so standard GRUB2 themes can be used. Exboot should create `/ventoy/ventoy.json`, `/ventoy/theme/exboot/theme.txt`, and copy the selected background image into the same theme directory, using a theme file with the user-selected colors and menu title.
+
+Source: https://www.ventoy.net/en/plugin_theme.html

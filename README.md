@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
 
-The current application version is `0.1.6`. Publish future builds with semantic-style tags such as `v0.1.7` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.1.7`. Publish future builds with semantic-style tags such as `v0.1.8` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
 
 ## Appearance customization
 
@@ -42,15 +42,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.1.6.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.1.7.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.1.6` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.1.7` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 
-Select **Multi-boot USB (Ventoy)** from the Creation mode control to place multiple operating-system images on one USB. Add ISO, WIM, IMG, VHD, or VHDX files, select the target USB disk, and confirm the two-step erase warning. Exboot downloads the latest official Ventoy Windows package from the Ventoy GitHub Releases endpoint, verifies its SHA-256 checksum from the accompanying `sha256.txt`, installs Ventoy in GPT mode through the documented Windows CLI, and copies the selected image files into an `Exboot Images` folder on the Ventoy data partition. Ventoy then discovers the files and presents them in its boot menu at startup.
+Select **Multi-boot USB (Ventoy)** from the Creation mode control to place multiple operating-system images on one USB. Add ISO, WIM, IMG, VHD, or VHDX files, select **Theme settings…** to choose a menu title, background image, and GRUB menu colors, then confirm the two-step erase warning. Exboot downloads the latest official Ventoy Windows package from the Ventoy GitHub Releases endpoint, verifies its SHA-256 checksum from the accompanying `sha256.txt`, installs Ventoy in GPT mode through the documented Windows CLI, and copies the selected image files into an `Exboot Images` folder on the Ventoy data partition. Ventoy then discovers the files and presents them in its styled boot menu at startup. Exboot writes `ventoy/ventoy.json`, `ventoy/theme/exboot/theme.txt`, and the selected background image into the USB data partition. PNG and JPEG backgrounds are supported.
 
 Multi-boot mode is intentionally separate from the single Windows installer mode. The Ventoy installation formats the selected USB disk and erases all existing data. Only use it with a USB drive you have backed up and verified by disk number, model, and capacity. Exboot does not silently download or install images, and it does not bypass operating-system licensing.
 
