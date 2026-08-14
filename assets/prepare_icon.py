@@ -1,7 +1,7 @@
 from pathlib import Path
 from PIL import Image
 
-source = Path(__file__).with_name("exboot_icon_master.png")
+source = Path(__file__).with_name("exboot_exstyle_master.png")
 output = Path(__file__).with_name("exboot.ico")
 image = Image.open(source).convert("RGBA")
 pixels = image.load()
