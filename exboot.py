@@ -18,7 +18,8 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.9"
+APP_VERSION = "0.2.0"
+AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/latest"
 
@@ -85,6 +86,8 @@ class ExbootApp(tk.Tk):
         self.checksum_manifest = {}
         self.benchmark_after_creation = tk.BooleanVar(value=False)
         self.benchmark_size_mb = tk.StringVar(value="512 MB")
+        self.last_notified_update = ""
+        self.update_check_in_progress = False
         self.theme_settings = {
             "title": "Enosx Technologies Exboot",
             "background": "",
@@ -96,7 +99,8 @@ class ExbootApp(tk.Tk):
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
-        self.after(1200, lambda: self.check_for_updates(show_no_update=False))
+        self.after(1200, lambda: self.check_for_updates(show_no_update=False, automatic=True))
+        self.after(AUTO_UPDATE_INTERVAL_MS, self.periodic_update_check)
 
     def build_ui(self):
         outer = ttk.Frame(self, padding=(20, 18), style="TFrame")
@@ -409,11 +413,18 @@ class ExbootApp(tk.Tk):
             parts.append(int(digits or 0))
         return tuple((parts + [0, 0, 0])[:3])
 
-    def check_for_updates(self, show_no_update=True):
-        self.status.set("Checking for updates…")
-        threading.Thread(target=self._check_for_updates_worker, args=(show_no_update,), daemon=True).start()
+    def periodic_update_check(self):
+        self.check_for_updates(show_no_update=False, automatic=True)
+        self.after(AUTO_UPDATE_INTERVAL_MS, self.periodic_update_check)
 
-    def _check_for_updates_worker(self, show_no_update):
+    def check_for_updates(self, show_no_update=True, automatic=False):
+        if self.update_check_in_progress:
+            return
+        self.update_check_in_progress = True
+        self.status.set("Checking for updates…")
+        threading.Thread(target=self._check_for_updates_worker, args=(show_no_update, automatic), daemon=True).start()
+
+    def _check_for_updates_worker(self, show_no_update, automatic):
         try:
             request = urllib.request.Request(
                 GITHUB_RELEASES_URL,
@@ -425,13 +436,18 @@ class ExbootApp(tk.Tk):
             release_url = release.get("html_url", "https://github.com/enigmacxenosx/Exboot/releases")
             notes = release.get("body") or "No release notes were provided."
             is_newer = bool(tag) and self.version_tuple(tag) > self.version_tuple(APP_VERSION)
-            self.after(0, lambda: self._show_update_result(is_newer, tag, release_url, notes, show_no_update))
+            self.after(0, lambda: self._show_update_result(is_newer, tag, release_url, notes, show_no_update, automatic))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
             self.after(0, lambda: self._show_update_error(str(exc), show_no_update))
 
-    def _show_update_result(self, is_newer, tag, release_url, notes, show_no_update):
+    def _show_update_result(self, is_newer, tag, release_url, notes, show_no_update, automatic):
+        self.update_check_in_progress = False
         self.status.set(f"Update available: {tag}" if is_newer else "Up to date")
         if is_newer:
+            if automatic and tag == self.last_notified_update:
+                self.log(f"Automatic update check: {tag} is still available; notification already shown this session.")
+                return
+            self.last_notified_update = tag
             short_notes = notes[:1200] + ("…" if len(notes) > 1200 else "")
             open_release = messagebox.askyesno(
                 "Exboot update available",
@@ -443,6 +459,7 @@ class ExbootApp(tk.Tk):
             messagebox.showinfo("Exboot updates", f"You are running the latest release ({APP_VERSION}).")
 
     def _show_update_error(self, error, show_no_update):
+        self.update_check_in_progress = False
         self.status.set("Update check unavailable")
         if show_no_update:
             messagebox.showwarning(
