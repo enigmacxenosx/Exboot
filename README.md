@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
 
-The current application version is `0.1.7`. Publish future builds with semantic-style tags such as `v0.1.8` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.1.8`. Publish future builds with semantic-style tags such as `v0.1.9` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
 
 ## Appearance customization
 
@@ -42,11 +42,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.1.7.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.1.8.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.1.7` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.1.8` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 
@@ -55,6 +55,12 @@ Select **Multi-boot USB (Ventoy)** from the Creation mode control to place multi
 Multi-boot mode is intentionally separate from the single Windows installer mode. The Ventoy installation formats the selected USB disk and erases all existing data. Only use it with a USB drive you have backed up and verified by disk number, model, and capacity. Exboot does not silently download or install images, and it does not bypass operating-system licensing.
 
 Exboot uses the official Ventoy Windows release package for the multi-boot engine. Ventoy is an open-source project distributed under GPL-3.0. Exboot downloads the package from the official Ventoy GitHub Releases endpoint at runtime and verifies its published SHA-256 checksum before invoking `Ventoy2Disk.exe`. See the [Ventoy project](https://github.com/ventoy/Ventoy), the [Ventoy startup guide](https://www.ventoy.net/en/doc_start.html), and the [Ventoy Windows CLI documentation](https://www.ventoy.net/en/doc_windows_cli.html) for details.
+
+## ISO integrity verification
+
+Before creating either single-ISO or multi-boot media, use the **Integrity verification** panel. Choose **SHA-256** or **MD5**, enter the expected hexadecimal digest, or load a standard checksum/manifest text file with **Checksum file…**, and press **Verify**. Exboot calculates the digest in a background worker using streaming reads, reports the result in the activity log, and blocks the creation workflow unless the selected files match the expected values. In multi-boot mode, a checksum manifest can contain one matching filename and digest per selected image.
+
+SHA-256 is recommended for modern integrity verification. MD5 is retained for compatibility with older vendor checksum files and should not be treated as a modern collision-resistant security signature. Exboot compares the complete digest before writing any data to the USB.
 
 ## Using Exboot
 

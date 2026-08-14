@@ -2,6 +2,7 @@ import ctypes
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,7 +18,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.7"
+APP_VERSION = "0.1.8"
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/latest"
 
@@ -76,6 +77,12 @@ class ExbootApp(tk.Tk):
         self.bypass_checks = tk.BooleanVar(value=False)
         self.media_mode = tk.StringVar(value="Single Windows installer")
         self.multi_iso_paths = []
+        self.checksum_algorithm = tk.StringVar(value="SHA-256")
+        self.checksum_expected = tk.StringVar()
+        self.checksum_status = tk.StringVar(value="Not verified")
+        self.verification_signature = None
+        self.checksum_manifest_path = ""
+        self.checksum_manifest = {}
         self.theme_settings = {
             "title": "Enosx Technologies Exboot",
             "background": "",
@@ -115,6 +122,22 @@ class ExbootApp(tk.Tk):
         self.iso_frame = iso_frame
         ttk.Entry(iso_frame, textvariable=self.iso_path).pack(side="left", fill="x", expand=True)
         ttk.Button(iso_frame, text="Browse…", command=self.choose_iso).pack(side="left", padx=(8, 0))
+
+        checksum_frame = ttk.LabelFrame(outer, text="Integrity verification", padding=12, style="Card.TLabelframe")
+        checksum_frame.pack(fill="x", pady=(0, 12))
+        self.checksum_frame = checksum_frame
+        ttk.Label(checksum_frame, text="Algorithm:").pack(side="left")
+        ttk.Combobox(
+            checksum_frame,
+            textvariable=self.checksum_algorithm,
+            state="readonly",
+            values=("SHA-256", "MD5"),
+            width=10,
+        ).pack(side="left", padx=(6, 12))
+        ttk.Entry(checksum_frame, textvariable=self.checksum_expected, width=48).pack(side="left", fill="x", expand=True)
+        ttk.Button(checksum_frame, text="Checksum file…", command=self.choose_checksum_file).pack(side="left", padx=(6, 0))
+        ttk.Button(checksum_frame, text="Verify", command=self.verify_checksums).pack(side="left", padx=(6, 0))
+        ttk.Label(checksum_frame, textvariable=self.checksum_status, width=22).pack(side="left", padx=(10, 0))
 
         disk_frame = ttk.LabelFrame(outer, text="2. Target USB drive", padding=12, style="Card.TLabelframe")
         disk_frame.pack(fill="x", pady=(0, 12))
@@ -415,6 +438,124 @@ class ExbootApp(tk.Tk):
         )
         if path:
             self.iso_path.set(path)
+            self.verification_signature = None
+            self.checksum_status.set("Not verified")
+
+    def choose_checksum_file(self):
+        path = filedialog.askopenfilename(
+            title="Select checksum or checksum manifest",
+            filetypes=[("Checksum files", "*.txt *.md5 *.sha256 *.sha256sum"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            manifest = self.parse_checksum_file(path)
+            if not manifest:
+                raise ValueError("No valid MD5 or SHA-256 checksum was found in the selected file.")
+            self.checksum_manifest_path = path
+            self.checksum_manifest = manifest
+            iso_name = Path(self.iso_path.get().strip()).name
+            expected = manifest.get(iso_name)
+            if expected is None and len(manifest) == 1:
+                expected = next(iter(manifest.values()))
+            self.checksum_expected.set(expected or f"Manifest loaded: {len(manifest)} file(s)")
+            self.checksum_status.set("Checksum file loaded")
+            self.verification_signature = None
+            self.log(f"Loaded {len(manifest)} checksum entr(y/ies) from {Path(path).name}.")
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Checksum file error", str(exc))
+
+    @staticmethod
+    def parse_checksum_file(path):
+        manifest = {}
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+            fields = line.strip().split()
+            digest = next((field.lower() for field in fields if re.fullmatch(r"[0-9a-fA-F]{32}|[0-9a-fA-F]{64}", field)), None)
+            if not digest:
+                continue
+            filename = ""
+            for field in reversed(fields):
+                candidate = field.lstrip("*\\/")
+                if candidate.lower().endswith((".iso", ".wim", ".img", ".vhd", ".vhdx")):
+                    filename = Path(candidate).name
+                    break
+            manifest[filename or f"__single_{len(manifest)}"] = digest
+        return manifest
+
+    def checksum_targets(self):
+        if self.media_mode.get() == "Multi-boot USB (Ventoy)":
+            return list(self.multi_iso_paths)
+        iso = self.iso_path.get().strip()
+        return [iso] if iso else []
+
+    def checksum_signature(self):
+        return (
+            tuple(self.checksum_targets()),
+            self.checksum_algorithm.get(),
+            self.checksum_expected.get().strip().lower(),
+            self.checksum_manifest_path,
+        )
+
+    def verify_checksums(self):
+        targets = self.checksum_targets()
+        if not targets or any(not Path(path).is_file() for path in targets):
+            messagebox.showerror("Images required", "Select valid ISO/image files before verifying their checksums.")
+            return
+        algorithm = "sha256" if self.checksum_algorithm.get() == "SHA-256" else "md5"
+        self.checksum_status.set("Calculating…")
+        threading.Thread(target=self._verify_checksums_worker, args=(targets, algorithm), daemon=True).start()
+
+    def _verify_checksums_worker(self, targets, algorithm):
+        try:
+            calculated = {}
+            for position, path in enumerate(targets, start=1):
+                self.log(f"Calculating {algorithm.upper()} for {Path(path).name} ({position}/{len(targets)})…")
+                digest = hashlib.new(algorithm)
+                with open(path, "rb") as source:
+                    while chunk := source.read(4 * 1024 * 1024):
+                        digest.update(chunk)
+                calculated[Path(path).name] = digest.hexdigest().lower()
+            expected = {}
+            if self.media_mode.get() == "Multi-boot USB (Ventoy)" and self.checksum_manifest:
+                expected = {name: value.lower() for name, value in self.checksum_manifest.items() if not name.startswith("__single_")}
+            if not expected:
+                typed = self.checksum_expected.get().strip().lower()
+                if re.fullmatch(r"[0-9a-f]{32}|[0-9a-f]{64}", typed) and len(targets) == 1:
+                    expected = {Path(targets[0]).name: typed}
+                elif self.checksum_manifest:
+                    values = list(self.checksum_manifest.values())
+                    if len(values) == len(targets):
+                        expected = dict(zip(calculated, [value.lower() for value in values]))
+            if not expected:
+                raise ValueError("Enter an expected checksum or load a checksum manifest before burning.")
+            mismatches = [name for name, value in calculated.items() if expected.get(name) != value]
+            if mismatches:
+                raise ValueError("Checksum mismatch: " + ", ".join(mismatches))
+            signature = self.checksum_signature()
+            self.after(0, lambda: self._verification_finished(True, signature, calculated))
+        except Exception as exc:
+            self.after(0, lambda: self._verification_finished(False, None, str(exc)))
+
+    def _verification_finished(self, success, signature, details):
+        if success:
+            self.verification_signature = signature
+            self.checksum_status.set("Verified")
+            self.log("Integrity verification passed: " + ", ".join(f"{name}={value}" for name, value in details.items()))
+            messagebox.showinfo("Integrity verified", "All selected image files match their expected checksums.")
+        else:
+            self.verification_signature = None
+            self.checksum_status.set("Verification failed")
+            self.log(f"Integrity verification failed: {details}")
+            messagebox.showerror("Integrity verification failed", str(details))
+
+    def ensure_integrity_verified(self):
+        if self.verification_signature != self.checksum_signature():
+            messagebox.showerror(
+                "Verification required",
+                "Verify the selected ISO/image files successfully before creating installation media.",
+            )
+            return False
+        return True
 
     def toggle_media_mode(self):
         multi = self.media_mode.get() == "Multi-boot USB (Ventoy)"
@@ -443,6 +584,8 @@ class ExbootApp(tk.Tk):
                 self.multi_iso_paths.append(path)
                 self.multi_list.insert("end", path)
         if paths:
+            self.verification_signature = None
+            self.checksum_status.set("Not verified")
             self.log(f"Selected {len(self.multi_iso_paths)} multi-boot image(s).")
 
     def show_multiboot_theme_settings(self):
@@ -503,8 +646,12 @@ class ExbootApp(tk.Tk):
         for index in reversed(selected):
             self.multi_list.delete(index)
             del self.multi_iso_paths[index]
+        self.verification_signature = None
+        self.checksum_status.set("Not verified")
 
     def start_multiboot_creation(self):
+        if not self.ensure_integrity_verified():
+            return
         if not is_admin():
             messagebox.showerror("Administrator required", "Run Exboot as Administrator before creating multi-boot media.")
             return
@@ -705,6 +852,8 @@ class ExbootApp(tk.Tk):
     def start_creation(self):
         if self.media_mode.get() == "Multi-boot USB (Ventoy)":
             self.start_multiboot_creation()
+            return
+        if not self.ensure_integrity_verified():
             return
         if not is_admin():
             messagebox.showerror("Administrator required", "Run Exboot as Administrator before creating USB media.")
