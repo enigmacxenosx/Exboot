@@ -5,11 +5,16 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.error
+import urllib.request
+import webbrowser
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
+APP_VERSION = "0.1.0"
+GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 
 
 def run_command(args, check=True, capture=True):
@@ -70,6 +75,7 @@ class ExbootApp(tk.Tk):
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
+        self.after(1200, lambda: self.check_for_updates(show_no_update=False))
 
     def build_ui(self):
         outer = ttk.Frame(self, padding=(20, 18), style="TFrame")
@@ -131,6 +137,7 @@ class ExbootApp(tk.Tk):
 
         action_frame = ttk.Frame(outer)
         action_frame.pack(fill="x", pady=(0, 12))
+        ttk.Button(action_frame, text="Check for updates", command=lambda: self.check_for_updates(True)).pack(side="right")
         self.create_button = ttk.Button(
             action_frame, text="Create Bootable USB", command=self.start_creation, style="Accent.TButton"
         )
@@ -218,6 +225,57 @@ class ExbootApp(tk.Tk):
             self.log_box.see("end")
             self.log_box.configure(state="disabled")
         self.after(0, append)
+
+    @staticmethod
+    def version_tuple(value):
+        cleaned = value.strip().lower().lstrip("v")
+        parts = []
+        for item in cleaned.split("."):
+            digits = "".join(character for character in item if character.isdigit())
+            parts.append(int(digits or 0))
+        return tuple((parts + [0, 0, 0])[:3])
+
+    def check_for_updates(self, show_no_update=True):
+        self.status.set("Checking for updates…")
+        threading.Thread(target=self._check_for_updates_worker, args=(show_no_update,), daemon=True).start()
+
+    def _check_for_updates_worker(self, show_no_update):
+        try:
+            request = urllib.request.Request(
+                GITHUB_RELEASES_URL,
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Exboot-Update-Checker"},
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                release = json.loads(response.read().decode("utf-8"))
+            tag = release.get("tag_name", "").strip()
+            release_url = release.get("html_url", "https://github.com/enigmacxenosx/Exboot/releases")
+            notes = release.get("body") or "No release notes were provided."
+            is_newer = bool(tag) and self.version_tuple(tag) > self.version_tuple(APP_VERSION)
+            self.after(0, lambda: self._show_update_result(is_newer, tag, release_url, notes, show_no_update))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            self.after(0, lambda: self._show_update_error(str(exc), show_no_update))
+
+    def _show_update_result(self, is_newer, tag, release_url, notes, show_no_update):
+        self.status.set(f"Update available: {tag}" if is_newer else "Up to date")
+        if is_newer:
+            short_notes = notes[:1200] + ("…" if len(notes) > 1200 else "")
+            open_release = messagebox.askyesno(
+                "Exboot update available",
+                f"A newer release ({tag}) is available.\n\nRelease notes:\n{short_notes}\n\nOpen the GitHub release page to download it?",
+            )
+            if open_release:
+                webbrowser.open(release_url)
+        elif show_no_update:
+            messagebox.showinfo("Exboot updates", f"You are running the latest release ({APP_VERSION}).")
+
+    def _show_update_error(self, error, show_no_update):
+        self.status.set("Update check unavailable")
+        if show_no_update:
+            messagebox.showwarning(
+                "Exboot updates",
+                "Exboot could not check GitHub Releases right now. Please check your internet connection or visit the repository manually.",
+            )
+        self.log(f"Update check unavailable: {error}")
 
     def choose_iso(self):
         path = filedialog.askopenfilename(

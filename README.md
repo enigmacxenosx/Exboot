@@ -2,6 +2,12 @@
 
 Exboot is a Windows desktop utility for creating bootable Windows installation media from a genuine ISO. It provides a graphical workflow for selecting the ISO, identifying USB disks, choosing a partition and boot mode, confirming the destructive operation, formatting the selected disk, copying installation files, and splitting a large `install.wim` for FAT32 compatibility.
 
+## Updates
+
+Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
+
+The current application version is `0.1.0`. Publish future builds with semantic-style tags such as `v0.1.1` or `v0.2.0` so the checker can compare them correctly.
+
 ## Enosx Technologies branding
 
 The desktop interface includes an Enosx Technologies banner with the Exboot name, product subtitle, and Enosx color treatment. The branding is implemented directly in the Windows interface so the portable executable does not require a separate image asset.
@@ -12,6 +18,7 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 |---|---|
 | `exboot.py` | Graphical desktop application implemented with Python and Tkinter |
 | `build_windows.ps1` | Windows build script that packages Exboot as a portable executable with PyInstaller |
+| `Exboot_Source_Package.zip` | Downloadable source and build package |
 | `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
 
 ## Requirements
