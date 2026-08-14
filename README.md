@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
 
-The current application version is `0.1.8`. Publish future builds with semantic-style tags such as `v0.1.9` or `v0.2.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.1.9`. Publish future builds with semantic-style tags such as `v0.2.0` or `v0.2.1` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
 
 ## Appearance customization
 
@@ -42,11 +42,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.1.8.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.1.9.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.1.8` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.1.9` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 
@@ -61,6 +61,12 @@ Exboot uses the official Ventoy Windows release package for the multi-boot engin
 Before creating either single-ISO or multi-boot media, use the **Integrity verification** panel. Choose **SHA-256** or **MD5**, enter the expected hexadecimal digest, or load a standard checksum/manifest text file with **Checksum file…**, and press **Verify**. Exboot calculates the digest in a background worker using streaming reads, reports the result in the activity log, and blocks the creation workflow unless the selected files match the expected values. In multi-boot mode, a checksum manifest can contain one matching filename and digest per selected image.
 
 SHA-256 is recommended for modern integrity verification. MD5 is retained for compatibility with older vendor checksum files and should not be treated as a modern collision-resistant security signature. Exboot compares the complete digest before writing any data to the USB.
+
+## USB speed benchmark
+
+After a successful single-ISO or multi-boot creation, enable **Run sequential read/write benchmark after creation** to measure the selected USB drive. Choose a temporary test size from 256 MB, 512 MB, 1 GB, or 2 GB. Exboot writes the test file sequentially, flushes it, reads it back sequentially, reports write and read throughput in MiB/s, and removes the temporary file in a cleanup step. The benchmark is optional, requires confirmation, and does not alter the installed operating-system images.
+
+Benchmark numbers vary with the USB controller, port, filesystem, drive fullness, thermal throttling, and operating-system caching. They are useful for relative comparison, not as a guarantee of sustained performance in every workload. Keep sufficient free space available and do not disconnect the USB drive while the test is running.
 
 ## Using Exboot
 

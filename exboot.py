@@ -18,7 +18,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.8"
+APP_VERSION = "0.1.9"
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/latest"
 
@@ -83,6 +83,8 @@ class ExbootApp(tk.Tk):
         self.verification_signature = None
         self.checksum_manifest_path = ""
         self.checksum_manifest = {}
+        self.benchmark_after_creation = tk.BooleanVar(value=False)
+        self.benchmark_size_mb = tk.StringVar(value="512 MB")
         self.theme_settings = {
             "title": "Enosx Technologies Exboot",
             "background": "",
@@ -138,6 +140,24 @@ class ExbootApp(tk.Tk):
         ttk.Button(checksum_frame, text="Checksum file…", command=self.choose_checksum_file).pack(side="left", padx=(6, 0))
         ttk.Button(checksum_frame, text="Verify", command=self.verify_checksums).pack(side="left", padx=(6, 0))
         ttk.Label(checksum_frame, textvariable=self.checksum_status, width=22).pack(side="left", padx=(10, 0))
+
+        benchmark_frame = ttk.LabelFrame(outer, text="Post-creation USB benchmark", padding=12, style="Card.TLabelframe")
+        benchmark_frame.pack(fill="x", pady=(0, 12))
+        self.benchmark_frame = benchmark_frame
+        ttk.Checkbutton(
+            benchmark_frame,
+            text="Run sequential read/write benchmark after creation",
+            variable=self.benchmark_after_creation,
+        ).pack(side="left")
+        ttk.Label(benchmark_frame, text="Test size:").pack(side="left", padx=(16, 6))
+        ttk.Combobox(
+            benchmark_frame,
+            textvariable=self.benchmark_size_mb,
+            state="readonly",
+            values=("256 MB", "512 MB", "1 GB", "2 GB"),
+            width=8,
+        ).pack(side="left")
+        ttk.Label(benchmark_frame, text="A temporary file is written, read, and deleted.").pack(side="left", padx=(12, 0))
 
         disk_frame = ttk.LabelFrame(outer, text="2. Target USB drive", padding=12, style="Card.TLabelframe")
         disk_frame.pack(fill="x", pady=(0, 12))
@@ -557,6 +577,80 @@ class ExbootApp(tk.Tk):
             return False
         return True
 
+    def parse_benchmark_size(self):
+        value = self.benchmark_size_mb.get().strip().upper()
+        if value.endswith("GB"):
+            return int(float(value[:-2].strip()) * 1024)
+        return int(value.replace("MB", "").strip())
+
+    def offer_benchmark(self, usb_drive):
+        if not self.benchmark_after_creation.get():
+            return
+        size_mb = self.parse_benchmark_size()
+        confirmed = messagebox.askyesno(
+            "Run USB benchmark?",
+            f"Run a {size_mb} MB sequential read/write benchmark on {usb_drive}?\n\n"
+            "Exboot will write a temporary test file, read it back, and delete it afterward. "
+            "This may take several minutes and temporarily uses USB space.",
+            icon="question",
+        )
+        if confirmed:
+            self.create_button.configure(state="disabled")
+            self.status.set("Benchmarking…")
+            threading.Thread(target=self.run_usb_benchmark, args=(usb_drive, size_mb), daemon=True).start()
+
+    def run_usb_benchmark(self, usb_drive, size_mb):
+        test_path = Path(usb_drive + "\\") / f"Exboot_Benchmark_{os.getpid()}.bin"
+        size_bytes = size_mb * 1024 * 1024
+        chunk = b"EXBOOT-BENCHMARK-" + (b"0" * (4 * 1024 * 1024 - 17))
+        try:
+            usage = shutil.disk_usage(Path(usb_drive + "\\"))
+            if usage.free < size_bytes + 64 * 1024 * 1024:
+                raise RuntimeError(f"Not enough free space for a {size_mb} MB benchmark file.")
+            self.log(f"Starting USB benchmark: {size_mb} MB sequential write/read test on {usb_drive}…")
+            started = time.perf_counter()
+            written = 0
+            with test_path.open("wb", buffering=0) as target:
+                while written < size_bytes:
+                    amount = min(len(chunk), size_bytes - written)
+                    target.write(chunk[:amount])
+                    written += amount
+                os.fsync(target.fileno())
+            write_seconds = max(time.perf_counter() - started, 0.000001)
+            started = time.perf_counter()
+            read_bytes = 0
+            with test_path.open("rb", buffering=0) as source:
+                while source.read(4 * 1024 * 1024):
+                    read_bytes += 4 * 1024 * 1024
+            read_seconds = max(time.perf_counter() - started, 0.000001)
+            write_speed = size_bytes / write_seconds / (1024 * 1024)
+            read_speed = size_bytes / read_seconds / (1024 * 1024)
+            result = {"write": write_speed, "read": read_speed, "size": size_mb}
+            self.after(0, lambda: self._benchmark_finished(result))
+        except Exception as exc:
+            self.after(0, lambda: self._benchmark_failed(str(exc)))
+        finally:
+            try:
+                if test_path.exists():
+                    test_path.unlink()
+            except OSError as cleanup_error:
+                self.log(f"WARNING: Could not remove benchmark file {test_path}: {cleanup_error}")
+
+    def _benchmark_finished(self, result):
+        self.status.set("Ready")
+        self.create_button.configure(state="normal")
+        self.log(f"USB benchmark complete: write {result['write']:.1f} MiB/s; read {result['read']:.1f} MiB/s; test size {result['size']} MB.")
+        messagebox.showinfo(
+            "USB benchmark complete",
+            f"Sequential write: {result['write']:.1f} MiB/s\nSequential read: {result['read']:.1f} MiB/s\nTest size: {result['size']} MB\n\nThe temporary benchmark file was removed.",
+        )
+
+    def _benchmark_failed(self, error):
+        self.status.set("Ready")
+        self.create_button.configure(state="normal")
+        self.log(f"USB benchmark failed: {error}")
+        messagebox.showerror("USB benchmark failed", error)
+
     def toggle_media_mode(self):
         multi = self.media_mode.get() == "Multi-boot USB (Ventoy)"
         if multi:
@@ -764,6 +858,7 @@ class ExbootApp(tk.Tk):
                 self.write_ventoy_theme(usb_drive, self.theme_settings)
                 self.log("Ventoy will discover the copied images and display them in the styled boot menu.")
             self.after(0, lambda: messagebox.showinfo("Exboot", "Multi-boot USB creation completed."))
+            self.after(120, lambda drive=usb_drive: self.offer_benchmark(drive))
         except Exception as exc:
             self.log(f"ERROR: {exc}")
             self.after(0, lambda: messagebox.showerror("Exboot multi-boot failed", str(exc)))
@@ -982,6 +1077,7 @@ class ExbootApp(tk.Tk):
                     os.unlink(active_path)
             self.log(f"Completed successfully using {mode}.")
             self.after(0, lambda: messagebox.showinfo("Exboot", "Bootable Windows USB creation completed."))
+            self.after(120, lambda drive=usb_drive: self.offer_benchmark(drive))
         except Exception as exc:
             self.log(f"ERROR: {exc}")
             self.after(0, lambda: messagebox.showerror("Exboot failed", str(exc)))
