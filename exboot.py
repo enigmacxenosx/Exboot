@@ -10,10 +10,10 @@ import urllib.request
 import webbrowser
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.1.2"
+APP_VERSION = "0.1.3"
 GITHUB_RELEASES_URL = "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
 
 
@@ -58,15 +58,12 @@ class ExbootApp(tk.Tk):
         self.geometry("860x700")
         self.minsize(760, 620)
         self.resizable(True, True)
-        self.configure(bg="#f3f6fb")
-        style = ttk.Style(self)
-        try:
-            style.theme_use("vista")
-        except tk.TclError:
-            pass
-        style.configure("Card.TLabelframe", padding=12)
-        style.configure("Card.TLabelframe.Label", font=("Segoe UI", 10, "bold"))
-        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"))
+        self.disks = []
+        self.settings_path = Path(os.environ.get("APPDATA", Path.home())) / "Enosx Technologies" / "Exboot" / "settings.json"
+        self.dark_mode = tk.BooleanVar(value=False)
+        self.accent_color = "#2bb3a3"
+        self.load_appearance_settings()
+        self.apply_theme()
         self.disks = []
         self.iso_path = tk.StringVar()
         self.selected_disk = tk.StringVar()
@@ -126,17 +123,18 @@ class ExbootApp(tk.Tk):
             foreground="#8a4b00",
         ).pack(anchor="w", pady=(5, 0))
 
-        warning = ttk.Label(
+        self.warning_label = ttk.Label(
             outer,
             text="WARNING: The selected USB drive will be erased completely. Verify the disk carefully.",
-            foreground="#a00000",
+            style="Warning.TLabel",
             font=("Segoe UI", 10, "bold"),
             wraplength=700,
         )
-        warning.pack(anchor="w", pady=(0, 12))
+        self.warning_label.pack(anchor="w", pady=(0, 12))
 
         action_frame = ttk.Frame(outer)
         action_frame.pack(fill="x", pady=(0, 12))
+        ttk.Button(action_frame, text="Appearance", command=self.show_appearance_settings).pack(side="right", padx=(8, 0))
         ttk.Button(action_frame, text="Check for updates", command=lambda: self.check_for_updates(True)).pack(side="right")
         self.create_button = ttk.Button(
             action_frame, text="Create Bootable USB", command=self.start_creation, style="Accent.TButton"
@@ -152,11 +150,98 @@ class ExbootApp(tk.Tk):
         scroll.pack(side="right", fill="y")
         self.log_box.configure(yscrollcommand=scroll.set)
 
-        ttk.Label(
+        self.footer_label = ttk.Label(
             outer,
             text="Exboot creates installation media only. It does not activate Windows or bypass licensing.",
             font=("Segoe UI", 8),
-        ).pack(anchor="w", pady=(10, 0))
+        )
+        self.footer_label.pack(anchor="w", pady=(10, 0))
+
+    def load_appearance_settings(self):
+        try:
+            data = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            self.dark_mode.set(bool(data.get("dark_mode", False)))
+            color = str(data.get("accent_color", self.accent_color))
+            if color.startswith("#") and len(color) == 7:
+                self.accent_color = color
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def save_appearance_settings(self):
+        try:
+            self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+            self.settings_path.write_text(
+                json.dumps({"dark_mode": self.dark_mode.get(), "accent_color": self.accent_color}, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            self.log("Could not save appearance settings.")
+
+    def apply_theme(self):
+        dark = self.dark_mode.get()
+        colors = {
+            "window": "#111827" if dark else "#f3f6fb",
+            "card": "#1f2937" if dark else "#ffffff",
+            "text": "#f3f4f6" if dark else "#102a43",
+            "muted": "#cbd5e1" if dark else "#526579",
+            "input": "#111827" if dark else "#ffffff",
+            "warning": "#fbbf24" if dark else "#a00000",
+            "log": "#0b1220" if dark else "#ffffff",
+        }
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.configure(bg=colors["window"])
+        style.configure("TFrame", background=colors["window"])
+        style.configure("TLabel", background=colors["window"], foreground=colors["text"])
+        style.configure("Card.TLabelframe", background=colors["card"], foreground=colors["text"], padding=12)
+        style.configure("Card.TLabelframe.Label", background=colors["card"], foreground=colors["text"], font=("Segoe UI", 10, "bold"))
+        style.configure("TButton", background=colors["card"], foreground=colors["text"])
+        style.map("TButton", background=[("active", self.accent_color)], foreground=[("active", "white")])
+        style.configure("Accent.TButton", background=self.accent_color, foreground="white", font=("Segoe UI", 10, "bold"))
+        style.map("Accent.TButton", background=[("active", self.accent_color)])
+        style.configure("TCheckbutton", background=colors["card"], foreground=colors["text"])
+        style.configure("TCombobox", fieldbackground=colors["input"], background=colors["card"], foreground=colors["text"])
+        style.configure("TEntry", fieldbackground=colors["input"], foreground=colors["text"])
+        style.configure("Warning.TLabel", background=colors["window"], foreground=colors["warning"])
+        if hasattr(self, "log_box"):
+            self.log_box.configure(bg=colors["log"], fg=colors["text"], insertbackground=colors["text"])
+        if hasattr(self, "banner"):
+            self.banner.configure(bg="#111827" if dark else "#102a43")
+            self.draw_banner()
+
+    def show_appearance_settings(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Exboot Appearance")
+        dialog.transient(self)
+        dialog.resizable(False, False)
+        frame = ttk.Frame(dialog, padding=18)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Appearance", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="Customize the Exboot interface.").pack(anchor="w", pady=(0, 14))
+        ttk.Checkbutton(frame, text="Use dark mode", variable=self.dark_mode, command=self._appearance_changed).pack(anchor="w")
+        color_row = ttk.Frame(frame)
+        color_row.pack(fill="x", pady=(14, 0))
+        ttk.Label(color_row, text="Accent color:").pack(side="left")
+        swatch = tk.Label(color_row, width=4, height=1, bg=self.accent_color, relief="solid", bd=1)
+        swatch.pack(side="left", padx=10)
+        ttk.Button(color_row, text="Choose color…", command=lambda: self.choose_accent_color(swatch)).pack(side="left")
+        ttk.Button(frame, text="Done", command=dialog.destroy).pack(anchor="e", pady=(18, 0))
+
+    def _appearance_changed(self):
+        self.apply_theme()
+        self.save_appearance_settings()
+
+    def choose_accent_color(self, swatch=None):
+        selected = colorchooser.askcolor(color=self.accent_color, title="Choose Exboot accent color")[1]
+        if selected:
+            self.accent_color = selected
+            if swatch:
+                swatch.configure(bg=selected)
+            self.apply_theme()
+            self.save_appearance_settings()
 
     def apply_labconfig_bypass(self, usb_drive):
         boot_wim = os.path.join(usb_drive + "\\", "sources", "boot.wim")
@@ -210,11 +295,14 @@ class ExbootApp(tk.Tk):
         width = self.banner.winfo_width()
         height = self.banner.winfo_height()
         self.banner.delete("all")
-        self.banner.create_rectangle(0, 0, width, height, fill="#102a43", outline="")
-        self.banner.create_rectangle(0, height - 6, width, height, fill="#2bb3a3", outline="")
-        self.banner.create_oval(width - 150, -90, width + 40, 100, fill="#173f5f", outline="")
-        self.banner.create_oval(width - 95, -50, width + 75, 120, fill="#1c6e8c", outline="")
-        self.banner.create_text(24, 29, anchor="w", text="ENOSX TECHNOLOGIES", fill="#8ee3d5", font=("Segoe UI", 11, "bold"))
+        dark = self.dark_mode.get()
+        base = "#111827" if dark else "#102a43"
+        secondary = "#1f2937" if dark else "#173f5f"
+        self.banner.create_rectangle(0, 0, width, height, fill=base, outline="")
+        self.banner.create_rectangle(0, height - 6, width, height, fill=self.accent_color, outline="")
+        self.banner.create_oval(width - 150, -90, width + 40, 100, fill=secondary, outline="")
+        self.banner.create_oval(width - 95, -50, width + 75, 120, fill=self.accent_color, outline="")
+        self.banner.create_text(24, 29, anchor="w", text="ENOSX TECHNOLOGIES", fill=self.accent_color, font=("Segoe UI", 11, "bold"))
         self.banner.create_text(24, 59, anchor="w", text="Exboot", fill="white", font=("Segoe UI", 24, "bold"))
         self.banner.create_text(width - 24, 48, anchor="e", text="Windows Bootable USB Creator", fill="#d9eaf7", font=("Segoe UI", 10))
 

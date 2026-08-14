@@ -6,7 +6,11 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` at startup and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, and opens the official GitHub release page only after the user confirms. It never silently downloads or replaces the executable.
 
-The current application version is `0.1.2`. Publish future builds with semantic-style tags such as `v0.1.3` or `v0.2.0` so the checker can compare them correctly.
+The current application version is `0.1.3`. Publish future builds with semantic-style tags such as `v0.1.4` or `v0.2.0` so the checker can compare them correctly.
+
+## Appearance customization
+
+The **Appearance** control provides a dark-mode toggle and a custom accent-color picker. The selected settings are stored per user under the Windows application-data folder and restored automatically at the next launch. The accent color is applied to the Enosx Technologies banner, action controls, and active control states.
 
 ## Enosx Technologies branding
 
@@ -36,11 +40,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.1.2.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created in `installer-output\\Exboot-Setup-0.1.3.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.1.2` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.1.3` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Using Exboot
 
