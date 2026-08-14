@@ -1,6 +1,6 @@
 # Exboot
 
-Exboot is a Windows desktop utility for creating bootable Windows installation media from a genuine ISO. It provides a graphical workflow for selecting the ISO, identifying USB disks, confirming the destructive operation, formatting the selected disk, copying installation files, and splitting a large `install.wim` for FAT32 compatibility.
+Exboot is a Windows desktop utility for creating bootable Windows installation media from a genuine ISO. It provides a graphical workflow for selecting the ISO, identifying USB disks, choosing a partition and boot mode, confirming the destructive operation, formatting the selected disk, copying installation files, and splitting a large `install.wim` for FAT32 compatibility.
 
 ## Project files
 
@@ -27,10 +27,18 @@ The generated portable executable will be placed in `dist\Exboot.exe`. The build
 
 ## Using Exboot
 
-Run `Exboot.exe` as Administrator. Select a genuine Windows ISO, choose the correct USB disk from the detected list, review the disk details, confirm the warning dialogs, and start creation. Exboot formats the selected USB drive as GPT/FAT32 and copies the installation files. The selected disk is erased completely.
+Run `Exboot.exe` as Administrator. Select a genuine Windows ISO, choose the correct USB disk from the detected list, select a partition and boot mode, review the disk details, confirm the warning dialogs, and start creation. The selected disk is erased completely.
+
+| Option | Partition table | File system | Intended boot mode |
+|---|---|---|---|
+| `GPT + UEFI` | GPT | FAT32 | Modern UEFI systems; recommended for most Windows 11 computers |
+| `MBR + UEFI` | MBR | FAT32 | UEFI systems that require MBR-formatted removable media |
+| `MBR + BIOS / Legacy` | MBR | NTFS | Older systems using legacy BIOS/CSM boot |
+
+The GPT/UEFI option is the default. The MBR/BIOS Legacy option also marks the USB partition active. Firmware compatibility varies by computer, so choose the option that matches the target system's boot configuration.
 
 > **Important:** Verify the target disk carefully and back up its contents before proceeding. Exboot cannot recover data erased from the selected drive.
 
 ## Status
 
-This repository contains the first graphical desktop version of Exboot. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.
+This repository contains the first graphical desktop version of Exboot with selectable GPT/UEFI, MBR/UEFI, and MBR/BIOS Legacy media layouts. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.

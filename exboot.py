@@ -56,6 +56,7 @@ class ExbootApp(tk.Tk):
         self.disks = []
         self.iso_path = tk.StringVar()
         self.selected_disk = tk.StringVar()
+        self.partition_mode = tk.StringVar(value="GPT + UEFI")
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
         self.refresh_disks()
@@ -83,6 +84,20 @@ class ExbootApp(tk.Tk):
         )
         self.disk_combo.pack(side="left", fill="x", expand=True)
         ttk.Button(disk_frame, text="Refresh", command=self.refresh_disks).pack(side="left", padx=(8, 0))
+
+        mode_frame = ttk.LabelFrame(outer, text="3. Partition scheme and boot mode", padding=12)
+        mode_frame.pack(fill="x", pady=(0, 12))
+        self.mode_combo = ttk.Combobox(
+            mode_frame,
+            textvariable=self.partition_mode,
+            state="readonly",
+            values=("GPT + UEFI", "MBR + UEFI", "MBR + BIOS / Legacy"),
+        )
+        self.mode_combo.pack(side="left", fill="x", expand=True)
+        ttk.Label(
+            mode_frame,
+            text="GPT/UEFI is recommended for modern Windows 11 systems.",
+        ).pack(side="left", padx=(12, 0))
 
         warning = ttk.Label(
             outer,
@@ -177,7 +192,7 @@ class ExbootApp(tk.Tk):
         disk_name = self.disk_combo.get()
         confirmed = messagebox.askyesno(
             "Confirm erase",
-            f"Exboot will erase ALL data on:\n\n{disk_name}\n\nDo you want to continue?",
+            f"Exboot will erase ALL data on:\n\n{disk_name}\n\nSelected mode: {self.partition_mode.get()}\n\nDo you want to continue?",
             icon="warning",
         )
         if not confirmed:
@@ -190,9 +205,13 @@ class ExbootApp(tk.Tk):
             return
         self.create_button.configure(state="disabled")
         self.status.set("Working…")
-        threading.Thread(target=self.create_media, args=(iso, disk_number), daemon=True).start()
+        threading.Thread(
+            target=self.create_media,
+            args=(iso, disk_number, self.partition_mode.get()),
+            daemon=True,
+        ).start()
 
-    def create_media(self, iso, disk_number):
+    def create_media(self, iso, disk_number, mode):
         mounted = False
         iso_drive = None
         try:
@@ -209,13 +228,23 @@ class ExbootApp(tk.Tk):
                 raise RuntimeError("The ISO does not contain a Windows install image.")
             self.log(f"ISO mounted at {iso_drive}")
 
+            if mode == "GPT + UEFI":
+                partition_scheme = "gpt"
+                filesystem = "fat32"
+            elif mode == "MBR + UEFI":
+                partition_scheme = "mbr"
+                filesystem = "fat32"
+            else:
+                partition_scheme = "mbr"
+                filesystem = "ntfs"
+
             script = "\n".join(
                 [
                     f"select disk {disk_number}",
                     "clean",
-                    "convert gpt",
+                    f"convert {partition_scheme}",
                     "create partition primary",
-                    "format fs=fat32 quick label=WIN11",
+                    f"format fs={filesystem} quick label=WIN11",
                     "assign",
                     "exit",
                 ]
@@ -224,7 +253,7 @@ class ExbootApp(tk.Tk):
                 handle.write(script)
                 diskpart_script = handle.name
             try:
-                self.log(f"Formatting Disk {disk_number} as GPT/FAT32…")
+                self.log(f"Formatting Disk {disk_number} as {partition_scheme.upper()}/{filesystem.upper()} for {mode}…")
                 result = run_command(["diskpart.exe", "/s", diskpart_script], check=False)
                 if result.returncode != 0:
                     raise RuntimeError(result.stdout + result.stderr)
@@ -259,16 +288,17 @@ class ExbootApp(tk.Tk):
                     while chunk := src.read(1024 * 1024):
                         dst.write(chunk)
 
-            self.log("Marking the USB partition active where supported…")
-            active_script = f"select disk {disk_number}\nselect partition 1\nactive\nexit\n"
-            with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="ascii") as handle:
-                handle.write(active_script)
-                active_path = handle.name
-            try:
-                run_command(["diskpart.exe", "/s", active_path], check=False)
-            finally:
-                os.unlink(active_path)
-            self.log("Completed successfully. You can boot the target computer from the USB.")
+            if mode == "MBR + BIOS / Legacy":
+                self.log("Marking the MBR USB partition active for BIOS/Legacy boot…")
+                active_script = f"select disk {disk_number}\nselect partition 1\nactive\nexit\n"
+                with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="ascii") as handle:
+                    handle.write(active_script)
+                    active_path = handle.name
+                try:
+                    run_command(["diskpart.exe", "/s", active_path], check=False)
+                finally:
+                    os.unlink(active_path)
+            self.log(f"Completed successfully using {mode}.")
             self.after(0, lambda: messagebox.showinfo("Exboot", "Bootable Windows USB creation completed."))
         except Exception as exc:
             self.log(f"ERROR: {exc}")
