@@ -1,2 +1,6 @@
 Desktop.ini
 *.log
+__pycache__/
+build/
+dist/
+*.spec

@@ -1,31 +1,36 @@
 # Exboot
 
-Exboot is a Windows bootable-media creator for Windows 11 installation ISOs. It uses built-in Windows utilities to mount an ISO, prepare a selected USB drive, copy the installation files, and split a large `install.wim` when required for FAT32 media.
+Exboot is a Windows desktop utility for creating bootable Windows installation media from a genuine ISO. It provides a graphical workflow for selecting the ISO, identifying USB disks, confirming the destructive operation, formatting the selected disk, copying installation files, and splitting a large `install.wim` for FAT32 compatibility.
 
-## Included tool
+## Project files
 
-- `Windows11_Bootable_USB_Creator.bat` — administrator batch utility with ISO selection, disk listing, explicit `ERASE` confirmation, GPT/FAT32 formatting, file copying, and installation-image splitting.
+| File | Purpose |
+|---|---|
+| `exboot.py` | Graphical desktop application implemented with Python and Tkinter |
+| `build_windows.ps1` | Windows build script that packages Exboot as a portable executable with PyInstaller |
+| `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
 
 ## Requirements
 
-Exboot requires Windows 10 or Windows 11, Administrator privileges, a genuine Windows installation ISO, and a USB drive large enough for the installation media.
+Exboot is intended for Windows 10 or Windows 11. The application must run as Administrator because it uses DiskPart, DISM, PowerShell disk-management commands, and Robocopy. A genuine Windows ISO and a USB drive with sufficient capacity are required.
 
-## Important warning
+## Building the Windows executable
 
-> The selected USB disk will be erased completely. Confirm the disk number carefully before typing `ERASE`, and back up any files on the USB drive first.
+Install Python 3.10 or newer on Windows, open PowerShell in the project directory, and run:
 
-Exboot creates Windows installation media only. It does not activate Windows, bypass licensing, or provide a product key.
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\build_windows.ps1
+```
 
-## Usage
+The generated portable executable will be placed in `dist\Exboot.exe`. The build script does not activate Windows, bypass licensing, or include a product key.
 
-1. Download a genuine Windows ISO from Microsoft.
-2. Connect the USB drive and close applications that are using it.
-3. Run `Windows11_Bootable_USB_Creator.bat` as Administrator.
-4. Enter the ISO path when prompted.
-5. Review the `diskpart` disk list and enter the correct USB disk number.
-6. Type `ERASE` only after confirming that the selected disk is the USB drive.
-7. Boot the target computer from the completed USB media.
+## Using Exboot
+
+Run `Exboot.exe` as Administrator. Select a genuine Windows ISO, choose the correct USB disk from the detected list, review the disk details, confirm the warning dialogs, and start creation. Exboot formats the selected USB drive as GPT/FAT32 and copies the installation files. The selected disk is erased completely.
+
+> **Important:** Verify the target disk carefully and back up its contents before proceeding. Exboot cannot recover data erased from the selected drive.
 
 ## Status
 
-This is the initial command-line version of Exboot. A graphical desktop interface can be added in a future version.
+This repository contains the first graphical desktop version of Exboot. The application source is validated for Python syntax. Windows executable packaging must be performed on Windows because the final executable depends on Windows system utilities.
