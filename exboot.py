@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.3.3"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -107,6 +107,14 @@ class ExbootApp(tk.Tk):
         self.last_notified_update = ""
         self.update_check_in_progress = False
         self.update_install_in_progress = False
+        # Initialize widget references before build_ui so early mode changes cannot
+        # raise AttributeError if a packaged or restored UI path is incomplete.
+        self.disk_frame = None
+        self.iso_frame = None
+        self.mode_frame = None
+        self.bypass_frame = None
+        self.multi_frame = None
+        self.warning_label = None
         self.theme_settings = {
             "title": "Enosx Technologies Exboot",
             "background": "",
@@ -1121,24 +1129,38 @@ class ExbootApp(tk.Tk):
         self.log(f"USB benchmark failed: {error}")
         messagebox.showerror("USB benchmark failed", error)
 
-    def pack_before(self, widget, anchor_widget):
+    @staticmethod
+    def _safe_pack_forget(widget):
+        if widget is None:
+            return
         try:
-            if anchor_widget.winfo_ismapped():
-                widget.pack(fill="x", pady=(0, 12), before=anchor_widget)
-                return
+            widget.pack_forget()
         except tk.TclError:
             pass
-        widget.pack(fill="x", pady=(0, 12))
+
+    def pack_before(self, widget, anchor_widget):
+        if widget is None:
+            return
+        try:
+            if anchor_widget is not None and anchor_widget.winfo_exists():
+                if anchor_widget.winfo_ismapped():
+                    widget.pack(fill="x", pady=(0, 12), before=anchor_widget)
+                    return
+            widget.pack(fill="x", pady=(0, 12))
+        except tk.TclError:
+            # A restored or partially-created UI may contain a stale widget
+            # reference; leave that section hidden instead of crashing startup.
+            pass
 
     def toggle_media_mode(self):
         multi = self.media_mode.get() == "Multi-boot USB (Ventoy)"
         if multi:
-            self.iso_frame.pack_forget()
-            self.mode_frame.pack_forget()
-            self.bypass_frame.pack_forget()
+            self._safe_pack_forget(self.iso_frame)
+            self._safe_pack_forget(self.mode_frame)
+            self._safe_pack_forget(self.bypass_frame)
             self.pack_before(self.multi_frame, self.warning_label)
         else:
-            self.multi_frame.pack_forget()
+            self._safe_pack_forget(self.multi_frame)
             self.pack_before(self.iso_frame, self.disk_frame)
             self.pack_before(self.mode_frame, self.bypass_frame)
             self.pack_before(self.bypass_frame, self.multi_frame)

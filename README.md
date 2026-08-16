@@ -6,11 +6,15 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, selects the matching `ExbootSetup-{version}.exe` asset, and displays release notes before asking whether to download it. The downloaded installer is size-checked and verified against the SHA-256 digest published with the GitHub release asset before Exboot asks whether to launch it. Exboot closes before the installer starts, and it never silently replaces the running application.
 
-The current application version is `0.3.2`. Publish future builds with semantic-style tags such as `v0.3.2` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the Enosx AI splash logo from `assets/enosx-ai-splash-logo.ico`, with matching wizard artwork from `assets/enosx-ai-splash-wizard.png`.
+The current application version is `0.3.3`. Publish future builds with semantic-style tags such as `v0.3.3` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the Enosx AI splash logo from `assets/enosx-ai-splash-logo.ico`, with matching wizard artwork from `assets/enosx-ai-splash-wizard.png`.
+
+## Version 0.3.3
+
+Version 0.3.3 fixes a Windows startup crash caused by stale or partially-created Tkinter media-mode frames. The startup and mode-switch paths now tolerate missing or destroyed widgets instead of raising an invalid `disk_frame` command error.
 
 ## Version 0.3.2
 
-Version 0.3.2 adds a safe automatic update workflow. Exboot checks GitHub Releases, downloads only the matching single-file setup executable after confirmation, verifies its SHA-256 checksum, and closes before launching the installer.
+Version 0.3.2 adds a safe automatic update workflow. Exboot checks GitHub Releases, downloads only the matching single-file setup executable after confirmation, verifies its SHA-256 asset digest, and closes before launching the installer.
 
 ## Version 0.3.1
 
@@ -58,11 +62,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created as the single setup executable `installer-output\\ExbootSetup-0.3.2.exe`. It uses the Enosx AI logo as its Windows file icon, installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation. GitHub publishes the installer asset’s SHA-256 digest, which the automatic updater uses to verify downloads.
+The installer will be created as the single setup executable `installer-output\\ExbootSetup-0.3.3.exe`. It uses the Enosx AI logo as its Windows file icon, installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation. GitHub publishes the installer asset’s SHA-256 digest, which the automatic updater uses to verify downloads.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.3.2` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the single installer executable, stores it as a workflow artifact, and attaches only that `.exe` to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.3.3` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the single installer executable, stores it as a workflow artifact, and attaches only that `.exe` to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 
