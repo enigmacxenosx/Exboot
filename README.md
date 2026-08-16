@@ -4,9 +4,13 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 ## Updates
 
-Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, suppresses duplicate automatic notifications during the same session, and opens the official GitHub release page only after the user confirms. It never silently downloads, replaces, or executes an installer.
+Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, selects the matching `ExbootSetup-{version}.exe` asset, and displays release notes before asking whether to download it. The downloaded installer is size-checked and verified against the release SHA-256 checksum before Exboot asks whether to launch it. Exboot closes before the installer starts, and it never silently replaces the running application.
 
-The current application version is `0.3.1`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the Enosx AI splash logo from `assets/enosx-ai-splash-logo.ico`, with matching wizard artwork from `assets/enosx-ai-splash-wizard.png`.
+The current application version is `0.3.2`. Publish future builds with semantic-style tags such as `v0.3.2` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the Enosx AI splash logo from `assets/enosx-ai-splash-logo.ico`, with matching wizard artwork from `assets/enosx-ai-splash-wizard.png`.
+
+## Version 0.3.2
+
+Version 0.3.2 adds a safe automatic update workflow. Exboot checks GitHub Releases, downloads only the matching single-file setup executable after confirmation, verifies its SHA-256 checksum, and closes before launching the installer.
 
 ## Version 0.3.1
 
@@ -35,7 +39,7 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 | `assets/create_enosx_ai_splash_assets.py` | Generates the Enosx AI splash PNG and multi-resolution ICO assets |
 | `build_installer.ps1` | Builds the executable and packages it with Inno Setup |
 | `installer.iss` | Standard Windows installer definition |
-| `.github/workflows/build-installer.yml` | Builds the installer automatically on Windows and attaches it to tagged GitHub Releases |
+| `.github/workflows/build-installer.yml` | Builds the installer, publishes a SHA-256 checksum, and attaches both to tagged GitHub Releases |
 | `.github/workflows/quality-gates.yml` | Runs linting and a headless GUI smoke test on every push and pull request |
 | `Windows11_Bootable_USB_Creator.bat` | Legacy command-line version |
 | `multiboot_research.md` | Architecture notes and official Ventoy references |
@@ -54,11 +58,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created as the single setup executable `installer-output\\ExbootSetup-0.3.1.exe`. It uses the Enosx AI logo as its Windows file icon, installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created as the single setup executable `installer-output\\ExbootSetup-0.3.2.exe`. It uses the Enosx AI logo as its Windows file icon, installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation. Release builds also publish `ExbootSetup-0.3.2.exe.sha256`, which the automatic updater uses to verify downloads.
 
 ## Automated release builds
 
-Pushing a version tag such as `v0.3.1` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, stores it as a workflow artifact, and attaches it to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
+Pushing a version tag such as `v0.3.2` starts the Windows GitHub Actions build. The workflow builds `Exboot.exe`, installs Inno Setup on the Windows runner, creates the installer, generates its SHA-256 checksum, stores both as workflow artifacts, and attaches both to the matching GitHub Release. The repository must have Actions enabled and permission to write release contents.
 
 ## Multi-boot USB mode
 

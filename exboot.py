@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -106,6 +106,7 @@ class ExbootApp(tk.Tk):
         self.benchmark_size_mb = tk.StringVar(value="512 MB")
         self.last_notified_update = ""
         self.update_check_in_progress = False
+        self.update_install_in_progress = False
         self.theme_settings = {
             "title": "Enosx Technologies Exboot",
             "background": "",
@@ -624,12 +625,68 @@ class ExbootApp(tk.Tk):
             parts.append(int(digits or 0))
         return tuple((parts + [0, 0, 0])[:3])
 
+    @staticmethod
+    def select_installer_asset(release):
+        """Return the exact ExbootSetup asset for a release, if it is published."""
+        tag = str(release.get("tag_name", "")).strip().lstrip("vV")
+        if not tag:
+            return None
+        expected_name = f"ExbootSetup-{tag}.exe".lower()
+        for asset in release.get("assets") or []:
+            name = str(asset.get("name", "")).strip()
+            if name.lower() == expected_name:
+                url = str(asset.get("browser_download_url", "")).strip()
+                if url.startswith("https://github.com/"):
+                    return asset
+        return None
+
+    @staticmethod
+    def select_checksum_asset(release, installer_asset):
+        """Return the trusted checksum asset matching the published installer."""
+        installer_name = str(installer_asset.get("name", "")).strip()
+        if not installer_name:
+            return None
+        expected_names = {
+            f"{installer_name}.sha256".lower(),
+            f"{installer_name}.sha256sum".lower(),
+        }
+        for asset in release.get("assets") or []:
+            name = str(asset.get("name", "")).strip()
+            url = str(asset.get("browser_download_url", "")).strip()
+            if name.lower() in expected_names and url.startswith("https://github.com/"):
+                return asset
+        return None
+
+    @staticmethod
+    def parse_sha256_checksum(text, asset_name):
+        """Extract a SHA-256 checksum for a named installer from checksum text."""
+        expected_name = Path(str(asset_name)).name.lower()
+        for line in str(text).splitlines():
+            tokens = line.replace("*", " ").split()
+            if not tokens or not re.fullmatch(r"[0-9a-fA-F]{64}", tokens[0]):
+                continue
+            if len(tokens) == 1 or Path(tokens[-1]).name.lower() == expected_name:
+                return tokens[0].lower()
+        return None
+
+    @staticmethod
+    def update_download_path(asset_name):
+        """Return a safe temporary destination for a downloaded installer."""
+        safe_name = Path(str(asset_name)).name
+        if not safe_name.lower().endswith(".exe"):
+            raise ValueError("The release asset is not a Windows installer.")
+        update_dir = Path(tempfile.gettempdir()) / "Exboot" / "updates"
+        update_dir.mkdir(parents=True, exist_ok=True)
+        return update_dir / safe_name
+
     def periodic_update_check(self):
         self.check_for_updates(show_no_update=False, automatic=True)
         self.after(AUTO_UPDATE_INTERVAL_MS, self.periodic_update_check)
 
     def check_for_updates(self, show_no_update=True, automatic=False):
-        if self.update_check_in_progress:
+        if self.update_check_in_progress or getattr(
+            self, "update_install_in_progress", False
+        ):
             return
         self.update_check_in_progress = True
         self.status.set("Checking for updates…")
@@ -658,10 +715,23 @@ class ExbootApp(tk.Tk):
             is_newer = bool(tag) and self.version_tuple(tag) > self.version_tuple(
                 APP_VERSION
             )
+            asset = self.select_installer_asset(release) if is_newer else None
+            checksum_asset = (
+                self.select_checksum_asset(release, asset)
+                if asset is not None
+                else None
+            )
             self.after(
                 0,
                 lambda: self._show_update_result(
-                    is_newer, tag, release_url, notes, show_no_update, automatic
+                    is_newer,
+                    tag,
+                    release_url,
+                    notes,
+                    asset,
+                    checksum_asset,
+                    show_no_update,
+                    automatic,
                 ),
             )
         except (
@@ -669,13 +739,22 @@ class ExbootApp(tk.Tk):
             TimeoutError,
             json.JSONDecodeError,
             OSError,
+            ValueError,
         ) as exc:
             self.after(
                 0, lambda err=str(exc): self._show_update_error(err, show_no_update)
             )
 
     def _show_update_result(
-        self, is_newer, tag, release_url, notes, show_no_update, automatic
+        self,
+        is_newer,
+        tag,
+        release_url,
+        notes,
+        asset,
+        checksum_asset,
+        show_no_update,
+        automatic,
     ):
         self.update_check_in_progress = False
         self.status.set(f"Update available: {tag}" if is_newer else "Up to date")
@@ -687,24 +766,144 @@ class ExbootApp(tk.Tk):
                 return
             self.last_notified_update = tag
             short_notes = notes[:1200] + ("…" if len(notes) > 1200 else "")
-            open_release = messagebox.askyesno(
+            if asset is None:
+                visit_release = messagebox.askyesno(
+                    "Exboot update available",
+                    f"A newer release ({tag}) is available, but its matching Windows installer was not found.\n\nRelease notes:\n{short_notes}\n\nOpen the GitHub release page instead?",
+                )
+                if visit_release:
+                    webbrowser.open(release_url)
+                return
+            install_now = messagebox.askyesno(
                 "Exboot update available",
-                f"A newer release ({tag}) is available.\n\nRelease notes:\n{short_notes}\n\nOpen the GitHub release page to download it?",
+                f"A newer release ({tag}) is available.\n\nRelease notes:\n{short_notes}\n\nDownload and install it now? Exboot will close while the installer runs.",
             )
-            if open_release:
-                webbrowser.open(release_url)
+            if install_now:
+                self.update_install_in_progress = True
+                self.status.set(f"Downloading {asset.get('name', 'update')}…")
+                threading.Thread(
+                    target=self._download_update_worker,
+                    args=(asset, checksum_asset, tag),
+                    daemon=True,
+                ).start()
         elif show_no_update:
             messagebox.showinfo(
                 "Exboot updates", f"You are running the latest release ({APP_VERSION})."
             )
 
+    def _download_update_worker(self, asset, checksum_asset, tag):
+        installer_path = None
+        partial_path = None
+        try:
+            asset_name = str(asset.get("name", "")).strip()
+            download_url = str(asset.get("browser_download_url", "")).strip()
+            if not download_url.startswith("https://github.com/"):
+                raise ValueError("The release download URL is not trusted.")
+            expected_size = int(asset.get("size") or 0)
+            if expected_size > 500 * 1024 * 1024:
+                raise ValueError(
+                    "The release installer is larger than the allowed limit."
+                )
+            installer_path = self.update_download_path(asset_name)
+            partial_path = installer_path.with_suffix(installer_path.suffix + ".part")
+            if partial_path.exists():
+                partial_path.unlink()
+            request = urllib.request.Request(
+                download_url,
+                headers={
+                    "Accept": "application/octet-stream",
+                    "User-Agent": "Exboot-Update-Downloader",
+                },
+            )
+            digest = hashlib.sha256()
+            downloaded = 0
+            with (
+                urllib.request.urlopen(request, timeout=30) as response,
+                partial_path.open("wb") as output,
+            ):
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    downloaded += len(chunk)
+                    if downloaded > 500 * 1024 * 1024:
+                        raise ValueError(
+                            "The release installer exceeded the allowed limit."
+                        )
+                    digest.update(chunk)
+                    output.write(chunk)
+            if expected_size and downloaded != expected_size:
+                raise ValueError(
+                    f"The downloaded installer size ({downloaded}) does not match the release size ({expected_size})."
+                )
+            expected_digest = str(asset.get("digest") or "").lower().strip()
+            if expected_digest.startswith("sha256:"):
+                expected_digest = expected_digest.split(":", 1)[1]
+            if not expected_digest and checksum_asset is not None:
+                checksum_url = str(
+                    checksum_asset.get("browser_download_url", "")
+                ).strip()
+                if not checksum_url.startswith("https://github.com/"):
+                    raise ValueError("The release checksum URL is not trusted.")
+                checksum_request = urllib.request.Request(
+                    checksum_url,
+                    headers={
+                        "Accept": "text/plain",
+                        "User-Agent": "Exboot-Update-Downloader",
+                    },
+                )
+                with urllib.request.urlopen(checksum_request, timeout=10) as response:
+                    checksum_text = response.read(64 * 1024).decode("utf-8", "replace")
+                expected_digest = self.parse_sha256_checksum(checksum_text, asset_name)
+            if not expected_digest:
+                raise ValueError(
+                    "The release did not publish a usable SHA-256 checksum."
+                )
+            if digest.hexdigest().lower() != expected_digest:
+                raise ValueError(
+                    "The downloaded installer failed its SHA-256 verification."
+                )
+            partial_path.replace(installer_path)
+            self.after(0, lambda: self._show_download_result(installer_path, tag))
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            ValueError,
+        ) as exc:
+            if partial_path and partial_path.exists():
+                try:
+                    partial_path.unlink()
+                except OSError:
+                    pass
+            self.after(0, lambda err=str(exc): self._show_update_error(err, True))
+
+    def _show_download_result(self, installer_path, tag):
+        self.update_install_in_progress = False
+        self.status.set(f"Update {tag} downloaded")
+        start_now = messagebox.askyesno(
+            "Exboot update ready",
+            f"The {tag} installer was downloaded and verified. Start it now? Exboot will close before installation begins.",
+        )
+        if not start_now:
+            self.log(f"Update downloaded and ready to install: {installer_path}")
+            return
+        try:
+            subprocess.Popen([str(installer_path)], cwd=str(installer_path.parent))
+        except OSError as exc:
+            self._show_update_error(str(exc), True)
+            return
+        self.log(f"Launching update installer: {installer_path}")
+        self.after(250, self.destroy)
+
     def _show_update_error(self, error, show_no_update):
         self.update_check_in_progress = False
+        self.update_install_in_progress = False
         self.status.set("Update check unavailable")
         if show_no_update:
             messagebox.showwarning(
                 "Exboot updates",
-                "Exboot could not check GitHub Releases right now. Please check your internet connection or visit the repository manually.",
+                "Exboot could not download or install the update. Please check your internet connection or visit the repository manually.",
             )
         self.log(f"Update check unavailable: {error}")
 

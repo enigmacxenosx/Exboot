@@ -36,15 +36,23 @@ jobs:
         shell: pwsh
         run: .\build_installer.ps1
 
+      - name: Create installer checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem installer-output\ExbootSetup-*.exe | Select-Object -First 1
+          if (-not $installer) { throw 'ExbootSetup installer was not found.' }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Set-Content "$($installer.FullName).sha256" -Encoding ascii
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: Exboot-Windows-Installer
-          path: installer-output/*.exe
+          path: installer-output/*
 
       - name: Attach installer to release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release upload "${{ github.ref_name }}" installer-output/*.exe --clobber --repo "${{ github.repository }}"
+        run: gh release upload "${{ github.ref_name }}" installer-output/*.exe installer-output/*.exe.sha256 --clobber --repo "${{ github.repository }}"
