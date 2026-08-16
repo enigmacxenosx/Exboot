@@ -44,11 +44,13 @@ jobs:
           if (-not $installer) {
             throw "No installer executable was produced."
           }
-          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait -PassThru
+          $installDir = Join-Path $env:RUNNER_TEMP "ExbootInstall"
+          $installArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=`"$installDir`""
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList $installArgs -Wait -PassThru
           if ($install.ExitCode -ne 0) {
             throw "Installer exited with code $($install.ExitCode)."
           }
-          $installed = Join-Path ${env:ProgramFiles} "Exboot\Exboot.exe"
+          $installed = Join-Path $installDir "Exboot.exe"
           if (-not (Test-Path $installed)) {
             throw "Installed Exboot executable was not found at $installed."
           }
