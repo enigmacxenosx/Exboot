@@ -36,6 +36,32 @@ jobs:
         shell: pwsh
         run: .\build_installer.ps1
 
+      - name: Install and smoke-test the built installer
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem installer-output\*.exe | Select-Object -First 1
+          if (-not $installer) {
+            throw "No installer executable was produced."
+          }
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "Installer exited with code $($install.ExitCode)."
+          }
+          $installed = Join-Path ${env:ProgramFiles} "Exboot\Exboot.exe"
+          if (-not (Test-Path $installed)) {
+            throw "Installed Exboot executable was not found at $installed."
+          }
+          $smoke = Start-Process -FilePath $installed -ArgumentList "--smoke-test" -PassThru
+          if (-not $smoke.WaitForExit(30000)) {
+            $smoke.Kill()
+            throw "Installed Exboot startup smoke test timed out."
+          }
+          if ($smoke.ExitCode -ne 0) {
+            throw "Installed Exboot startup smoke test exited with code $($smoke.ExitCode)."
+          }
+          Write-Output "Installed Exboot startup smoke test passed."
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:

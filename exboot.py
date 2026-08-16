@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.3"
+APP_VERSION = "0.3.4"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
