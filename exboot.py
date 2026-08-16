@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.5"
+APP_VERSION = "0.3.6"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -28,14 +28,18 @@ VENTOY_RELEASES_URL = "https://api.github.com/repos/ventoy/Ventoy/releases/lates
 
 
 def run_command(args, check=True, capture=True):
-    return subprocess.run(
-        args,
-        text=True,
-        capture_output=capture,
-        check=check,
-        encoding="utf-8",
-        errors="replace",
-    )
+    options = {
+        "text": True,
+        "capture_output": capture,
+        "check": check,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if os.name == "nt":
+        # Keep PowerShell, DiskPart, DISM, and registry helpers hidden behind
+        # the standalone Tkinter UI instead of opening a console window.
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.run(args, **options)
 
 
 def ps(command):

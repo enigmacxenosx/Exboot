@@ -28,7 +28,7 @@ def draw_ex_mark(canvas, box):
     draw = ImageDraw.Draw(canvas)
     x0, y0, x1, y1 = box
     # The splash component uses a bold white EX wordmark with a tight tracking feel.
-    mark_font = font(FONT_PATH, int((y1 - y0) * 0.39))
+    mark_font = font(FONT_PATH, int((y1 - y0) * 0.43))
     text = "EX"
     bbox = draw.textbbox((0, 0), text, font=mark_font)
     tw = bbox[2] - bbox[0]
@@ -48,7 +48,7 @@ def draw_ex_mark(canvas, box):
 def draw_glass_mark(size):
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     center = size // 2
-    canvas.alpha_composite(radial_glow((size, size), (center, center), size * 0.56, (0, 242, 255), 125))
+    canvas.alpha_composite(radial_glow((size, size), (center, center), size * 0.64, (0, 242, 255), 165))
 
     panel = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     panel_draw = ImageDraw.Draw(panel)
@@ -56,9 +56,9 @@ def draw_glass_mark(size):
     panel_draw.rounded_rectangle(
         (int(size * 0.05), int(size * 0.05), int(size * 0.95), int(size * 0.95)),
         radius=radius,
-        fill=(255, 255, 255, 24),
-        outline=(255, 255, 255, 74),
-        width=max(2, int(size * 0.008)),
+        fill=(18, 35, 40, 205),
+        outline=(92, 239, 246, 185),
+        width=max(2, int(size * 0.012)),
     )
     canvas.alpha_composite(panel)
     draw_ex_mark(canvas, (int(size * 0.1), int(size * 0.1), int(size * 0.9), int(size * 0.9)))
@@ -67,8 +67,10 @@ def draw_glass_mark(size):
 
 def make_square_logo():
     size = 1024
-    image = Image.new("RGBA", (size, size), (5, 5, 5, 255))
-    image.alpha_composite(draw_glass_mark(760), (132, 80))
+    mark_size = 880
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    offset = (size - mark_size) // 2
+    image.alpha_composite(draw_glass_mark(mark_size), (offset, offset))
     return image
 
 
