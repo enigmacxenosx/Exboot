@@ -151,30 +151,6 @@ def test_select_installer_asset_rejects_untrusted_url():
     assert ExbootApp.select_installer_asset(release) is None
 
 
-def test_select_checksum_asset_and_parse_checksum():
-    installer = {
-        "name": "ExbootSetup-0.4.0.exe",
-        "browser_download_url": "https://github.com/enigmacxenosx/Exboot/releases/download/v0.4.0/ExbootSetup-0.4.0.exe",
-    }
-    release = {
-        "assets": [
-            {
-                "name": "ExbootSetup-0.4.0.exe.sha256",
-                "browser_download_url": "https://github.com/enigmacxenosx/Exboot/releases/download/v0.4.0/ExbootSetup-0.4.0.exe.sha256",
-            }
-        ]
-    }
-    checksum_asset = ExbootApp.select_checksum_asset(release, installer)
-    assert checksum_asset is not None
-    digest = "a" * 64
-    assert (
-        ExbootApp.parse_sha256_checksum(
-            f"{digest}  ExbootSetup-0.4.0.exe\n", installer["name"]
-        )
-        == digest
-    )
-
-
 if __name__ == "__main__":
     from pathlib import Path
 
@@ -193,7 +169,6 @@ if __name__ == "__main__":
         test_read_wim_timestamp_invalid,
         test_select_installer_asset,
         test_select_installer_asset_rejects_untrusted_url,
-        test_select_checksum_asset_and_parse_checksum,
     ]
     failed = 0
     for test in tests:

@@ -641,35 +641,6 @@ class ExbootApp(tk.Tk):
         return None
 
     @staticmethod
-    def select_checksum_asset(release, installer_asset):
-        """Return the trusted checksum asset matching the published installer."""
-        installer_name = str(installer_asset.get("name", "")).strip()
-        if not installer_name:
-            return None
-        expected_names = {
-            f"{installer_name}.sha256".lower(),
-            f"{installer_name}.sha256sum".lower(),
-        }
-        for asset in release.get("assets") or []:
-            name = str(asset.get("name", "")).strip()
-            url = str(asset.get("browser_download_url", "")).strip()
-            if name.lower() in expected_names and url.startswith("https://github.com/"):
-                return asset
-        return None
-
-    @staticmethod
-    def parse_sha256_checksum(text, asset_name):
-        """Extract a SHA-256 checksum for a named installer from checksum text."""
-        expected_name = Path(str(asset_name)).name.lower()
-        for line in str(text).splitlines():
-            tokens = line.replace("*", " ").split()
-            if not tokens or not re.fullmatch(r"[0-9a-fA-F]{64}", tokens[0]):
-                continue
-            if len(tokens) == 1 or Path(tokens[-1]).name.lower() == expected_name:
-                return tokens[0].lower()
-        return None
-
-    @staticmethod
     def update_download_path(asset_name):
         """Return a safe temporary destination for a downloaded installer."""
         safe_name = Path(str(asset_name)).name
@@ -716,11 +687,6 @@ class ExbootApp(tk.Tk):
                 APP_VERSION
             )
             asset = self.select_installer_asset(release) if is_newer else None
-            checksum_asset = (
-                self.select_checksum_asset(release, asset)
-                if asset is not None
-                else None
-            )
             self.after(
                 0,
                 lambda: self._show_update_result(
@@ -729,7 +695,6 @@ class ExbootApp(tk.Tk):
                     release_url,
                     notes,
                     asset,
-                    checksum_asset,
                     show_no_update,
                     automatic,
                 ),
@@ -752,7 +717,6 @@ class ExbootApp(tk.Tk):
         release_url,
         notes,
         asset,
-        checksum_asset,
         show_no_update,
         automatic,
     ):
@@ -783,7 +747,7 @@ class ExbootApp(tk.Tk):
                 self.status.set(f"Downloading {asset.get('name', 'update')}…")
                 threading.Thread(
                     target=self._download_update_worker,
-                    args=(asset, checksum_asset, tag),
+                    args=(asset, tag),
                     daemon=True,
                 ).start()
         elif show_no_update:
@@ -791,7 +755,7 @@ class ExbootApp(tk.Tk):
                 "Exboot updates", f"You are running the latest release ({APP_VERSION})."
             )
 
-    def _download_update_worker(self, asset, checksum_asset, tag):
+    def _download_update_worker(self, asset, tag):
         installer_path = None
         partial_path = None
         try:
@@ -839,22 +803,6 @@ class ExbootApp(tk.Tk):
             expected_digest = str(asset.get("digest") or "").lower().strip()
             if expected_digest.startswith("sha256:"):
                 expected_digest = expected_digest.split(":", 1)[1]
-            if not expected_digest and checksum_asset is not None:
-                checksum_url = str(
-                    checksum_asset.get("browser_download_url", "")
-                ).strip()
-                if not checksum_url.startswith("https://github.com/"):
-                    raise ValueError("The release checksum URL is not trusted.")
-                checksum_request = urllib.request.Request(
-                    checksum_url,
-                    headers={
-                        "Accept": "text/plain",
-                        "User-Agent": "Exboot-Update-Downloader",
-                    },
-                )
-                with urllib.request.urlopen(checksum_request, timeout=10) as response:
-                    checksum_text = response.read(64 * 1024).decode("utf-8", "replace")
-                expected_digest = self.parse_sha256_checksum(checksum_text, asset_name)
             if not expected_digest:
                 raise ValueError(
                     "The release did not publish a usable SHA-256 checksum."
