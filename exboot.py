@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.7"
+APP_VERSION = "0.3.8"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -88,7 +88,8 @@ class ExbootApp(tk.Tk):
             / "Exboot"
             / "settings.json"
         )
-        self.dark_mode = tk.BooleanVar(value=False)
+        # Dark mode is the preferred first-run appearance; saved preferences still win.
+        self.dark_mode = tk.BooleanVar(value=True)
         self.accent_color = "#2bb3a3"
         self.load_appearance_settings()
         self.apply_theme()
@@ -139,7 +140,12 @@ class ExbootApp(tk.Tk):
         outer = ttk.Frame(self, padding=(12, 12), style="TFrame")
         outer.pack(fill="both", expand=True)
 
-        self.scroll_canvas = tk.Canvas(outer, highlightthickness=0, bd=0, bg="#f3f6fb")
+        self.scroll_canvas = tk.Canvas(
+            outer,
+            highlightthickness=0,
+            bd=0,
+            bg="#111827" if self.dark_mode.get() else "#f3f6fb",
+        )
         self.scroll_canvas.pack(side="left", fill="both", expand=True)
         scroll_bar = ttk.Scrollbar(
             outer, orient="vertical", command=self.scroll_canvas.yview
@@ -405,7 +411,7 @@ class ExbootApp(tk.Tk):
     def load_appearance_settings(self):
         try:
             data = json.loads(self.settings_path.read_text(encoding="utf-8"))
-            self.dark_mode.set(bool(data.get("dark_mode", False)))
+            self.dark_mode.set(bool(data.get("dark_mode", True)))
             color = str(data.get("accent_color", self.accent_color))
             if color.startswith("#") and len(color) == 7:
                 self.accent_color = color
