@@ -11,13 +11,17 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\Exboot
 DefaultGroupName=Exboot
 OutputDir=installer-output
-OutputBaseFilename=Exboot-Setup-{#MyAppVersion}
+OutputBaseFilename=ExbootSetup-{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dark includetitlebar
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName}
-SetupIconFile=assets\exboot.ico
+SetupIconFile=assets\enosx-ai-splash-logo.ico
+WizardImageFile=assets\enosx-ai-splash-wizard.png
+WizardImageBackColor=$050505
+WizardSmallImageFile=assets\enosx-ai-splash-logo.png
+WizardSmallImageBackColor=$050505
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion

@@ -6,7 +6,7 @@ Exboot is a Windows desktop utility from **Enosx Technologies** for creating boo
 
 Exboot checks the public GitHub Releases endpoint for `enigmacxenosx/Exboot` shortly after startup, repeats the check every six hours while the application is open, and also provides a **Check for updates** button. The checker compares the installed application version with the latest release tag, displays release notes when a newer version is found, suppresses duplicate automatic notifications during the same session, and opens the official GitHub release page only after the user confirms. It never silently downloads, replaces, or executes an installer.
 
-The current application version is `0.3.1`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the EX-style Exboot icon from `assets/exboot.ico`, derived from the Enosx Technologies EX identity.
+The current application version is `0.3.1`. Publish future builds with semantic-style tags such as `v0.3.1` or `v0.4.0` so the checker can compare them correctly. The installer and executable use the Enosx AI splash logo from `assets/enosx-ai-splash-logo.ico`, with matching wizard artwork from `assets/enosx-ai-splash-wizard.png`.
 
 ## Version 0.3.1
 
@@ -22,7 +22,7 @@ The **Appearance** control provides a dark-mode toggle and a custom accent-color
 
 ## Enosx Technologies branding
 
-The desktop interface includes an Enosx Technologies banner with the Exboot name, product subtitle, and Enosx color treatment. The application icon now uses a stronger EX-style mark based on the supplied Enosx Technologies logo: angular cyan-blue geometry, a dark technical background, and a forward/boot motion cut. The branding is implemented directly in the Windows interface and packaging.
+The desktop interface includes an Enosx Technologies banner with the Exboot name, product subtitle, and Enosx color treatment. The installer now carries the Enosx AI splash treatment: a dark glass EX mark, cyan glow, `from Enosx Technologies` footer, and cyan progress accent. The same square splash logo is embedded into the Windows executable and used as the installer icon.
 
 ## Project files
 
@@ -30,7 +30,9 @@ The desktop interface includes an Enosx Technologies banner with the Exboot name
 |---|---|
 | `exboot.py` | Branded graphical desktop application implemented with Python and Tkinter |
 | `build_windows.ps1` | Builds the portable `dist\\Exboot.exe` application on Windows with the branded icon |
-| `assets/exboot.ico` | Multi-resolution Exboot application icon used by the executable and installer |
+| `assets/enosx-ai-splash-logo.ico` | Multi-resolution Enosx AI splash icon used by the executable and installer |
+| `assets/enosx-ai-splash-wizard.png` | Enosx AI splash artwork used on the installer welcome and completion pages |
+| `assets/create_enosx_ai_splash_assets.py` | Generates the Enosx AI splash PNG and multi-resolution ICO assets |
 | `build_installer.ps1` | Builds the executable and packages it with Inno Setup |
 | `installer.iss` | Standard Windows installer definition |
 | `.github/workflows/build-installer.yml` | Builds the installer automatically on Windows and attaches it to tagged GitHub Releases |
@@ -52,7 +54,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build_installer.ps1
 ```
 
-The installer will be created in `installer-output\\Exboot-Setup-0.3.1.exe`. It installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
+The installer will be created as the single setup executable `installer-output\\ExbootSetup-0.3.1.exe`. It uses the Enosx AI logo as its Windows file icon, installs Exboot under Program Files, creates a Start Menu shortcut, optionally creates a desktop shortcut, and can launch Exboot after installation.
 
 ## Automated release builds
 
