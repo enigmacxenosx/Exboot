@@ -19,7 +19,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.3.6"
+APP_VERSION = "0.3.7"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -136,8 +136,28 @@ class ExbootApp(tk.Tk):
         self.after(AUTO_UPDATE_INTERVAL_MS, self.periodic_update_check)
 
     def build_ui(self):
-        outer = ttk.Frame(self, padding=(20, 18), style="TFrame")
+        outer = ttk.Frame(self, padding=(12, 12), style="TFrame")
         outer.pack(fill="both", expand=True)
+
+        self.scroll_canvas = tk.Canvas(outer, highlightthickness=0, bd=0, bg="#f3f6fb")
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        scroll_bar = ttk.Scrollbar(
+            outer, orient="vertical", command=self.scroll_canvas.yview
+        )
+        scroll_bar.pack(side="right", fill="y")
+        self.scroll_canvas.configure(yscrollcommand=scroll_bar.set)
+        self.scroll_content = ttk.Frame(
+            self.scroll_canvas, padding=(8, 8), style="TFrame"
+        )
+        self.scroll_window = self.scroll_canvas.create_window(
+            (0, 0), window=self.scroll_content, anchor="nw"
+        )
+        self.scroll_content.bind("<Configure>", self._update_scroll_region)
+        self.scroll_canvas.bind("<Configure>", self._resize_scroll_content)
+        self.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
+        self.bind_all("<Button-4>", self._on_mousewheel, add="+")
+        self.bind_all("<Button-5>", self._on_mousewheel, add="+")
+        outer = self.scroll_content
 
         banner = tk.Canvas(outer, height=92, highlightthickness=0, bd=0, bg="#102a43")
         banner.pack(fill="x", pady=(0, 18))
@@ -352,6 +372,35 @@ class ExbootApp(tk.Tk):
         )
         self.footer_label.pack(anchor="w", pady=(10, 0))
         self.toggle_media_mode()
+        self.after_idle(self._update_scroll_region)
+
+    def _update_scroll_region(self, _event=None):
+        try:
+            self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        except (AttributeError, tk.TclError):
+            pass
+
+    def _resize_scroll_content(self, event):
+        try:
+            self.scroll_canvas.itemconfigure(self.scroll_window, width=event.width)
+            self._update_scroll_region()
+        except (AttributeError, tk.TclError):
+            pass
+
+    def _on_mousewheel(self, event):
+        try:
+            if event.num == 4:
+                units = -3
+            elif event.num == 5:
+                units = 3
+            else:
+                units = int(-event.delta / 120) if event.delta else 0
+                if units == 0 and event.delta:
+                    units = -1 if event.delta > 0 else 1
+            if units:
+                self.scroll_canvas.yview_scroll(units, "units")
+        except (AttributeError, tk.TclError):
+            pass
 
     def load_appearance_settings(self):
         try:
@@ -444,6 +493,8 @@ class ExbootApp(tk.Tk):
             self.log_box.configure(
                 bg=colors["log"], fg=colors["text"], insertbackground=colors["text"]
             )
+        if hasattr(self, "scroll_canvas"):
+            self.scroll_canvas.configure(bg=colors["window"])
         if hasattr(self, "banner"):
             self.banner.configure(bg="#111827" if dark else "#102a43")
             self.draw_banner()
@@ -1168,6 +1219,7 @@ class ExbootApp(tk.Tk):
             self.pack_before(self.iso_frame, self.disk_frame)
             self.pack_before(self.mode_frame, self.bypass_frame)
             self.pack_before(self.bypass_frame, self.multi_frame)
+        self.after_idle(self._update_scroll_region)
 
     @staticmethod
     def _read_wim_timestamp(header):
@@ -1891,6 +1943,16 @@ if __name__ == "__main__":
         # widgets render without exceptions, then close immediately and exit.
         app = ExbootApp()
         app.update_idletasks()
+        scrollregion = tuple(
+            float(value) for value in app.scroll_canvas.cget("scrollregion").split()
+        )
+        if len(scrollregion) != 4 or scrollregion[3] <= scrollregion[1]:
+            app.destroy()
+            raise RuntimeError("Exboot content did not create a vertical scroll region")
+        app.scroll_canvas.yview_moveto(1.0)
+        if app.scroll_canvas.yview()[1] <= 0.0:
+            app.destroy()
+            raise RuntimeError("Exboot content could not scroll downward")
         app.after(0, app.destroy)
         app.mainloop()
         raise SystemExit(0)
