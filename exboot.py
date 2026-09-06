@@ -1724,12 +1724,27 @@ class ExbootApp(tk.Tk):
 
     def refresh_disks(self):
         try:
+            # Some USB enclosures expose their media through a SCSI bridge, so
+            # Get-Disk reports BusType=SCSI (or an empty/unknown bus type) even
+            # though the physical device is USB.  Win32_DiskDrive still gives
+            # us the disk indexes for devices whose interface is USB.  Keep the
+            # filtering in PowerShell so internal disks are never offered as
+            # erase targets.
             command = (
-                "Get-Disk | Where-Object {$_.BusType -eq 'USB'} | "
+                "$usbIndexes = @(Get-CimInstance Win32_DiskDrive | "
+                "Where-Object {$_.InterfaceType -eq 'USB' -or "
+                "$_.PNPDeviceID -like 'USBSTOR*'} | "
+                "ForEach-Object {[int]$_.Index}); "
+                "Get-Disk | Where-Object {($_.BusType -eq 'USB' -or "
+                "$usbIndexes -contains $_.Number -or $_.IsRemovable) -and "
+                "$_.IsBoot -eq $false -and $_.IsSystem -eq $false} | "
                 "Select-Object Number,FriendlyName,Size,PartitionStyle,OperationalStatus | "
                 "ConvertTo-Json -Compress"
             )
             result = ps(command)
+            if result.returncode != 0:
+                details = (result.stderr or result.stdout).strip()
+                raise RuntimeError(details or "PowerShell returned an error")
             raw = result.stdout.strip()
             data = [] if not raw else json.loads(raw)
             if isinstance(data, dict):
@@ -1751,6 +1766,9 @@ class ExbootApp(tk.Tk):
                     "No USB disks detected. Connect a USB drive and click Refresh."
                 )
         except Exception as exc:
+            self.disks = []
+            self.disk_combo["values"] = []
+            self.selected_disk.set("")
             self.log(f"Could not enumerate USB disks: {exc}")
 
     def start_creation(self):
