@@ -634,6 +634,45 @@ class ExbootApp(tk.Tk):
             except OSError:
                 pass
 
+    @staticmethod
+    def verify_boot_files(usb_drive):
+        """Verify the files required by Windows removable-media boot paths."""
+        required = {
+            "Windows boot manager": os.path.join(usb_drive + "\\", "bootmgr"),
+            "Windows boot configuration": os.path.join(
+                usb_drive + "\\", "boot", "bcd"
+            ),
+            "UEFI x64 boot loader": os.path.join(
+                usb_drive + "\\", "efi", "boot", "bootx64.efi"
+            ),
+        }
+        missing = [label for label, path in required.items() if not os.path.isfile(path)]
+        if missing:
+            raise RuntimeError(
+                "The USB was copied, but it is missing required boot files: "
+                + ", ".join(missing)
+                + ". Check that the selected ISO is a genuine Windows installation image."
+            )
+
+    def install_bios_boot_code(self, iso_drive, usb_drive):
+        """Install NT60 boot code for legacy BIOS media."""
+        candidates = (
+            os.path.join(iso_drive + "\\", "boot", "bootsect.exe"),
+            os.path.join(iso_drive + "\\", "bootsect.exe"),
+        )
+        bootsect = next((path for path in candidates if os.path.isfile(path)), None)
+        if not bootsect:
+            raise RuntimeError(
+                "The ISO does not contain bootsect.exe, so legacy BIOS boot code "
+                "could not be installed. Use a genuine Windows ISO or select a UEFI mode."
+            )
+        result = run_command([bootsect, usb_drive, "/nt60", "/mbr"], check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Could not install legacy BIOS boot code on the USB: "
+                + (result.stdout + result.stderr).strip()
+            )
+
     def draw_banner(self, event=None):
         width = self.banner.winfo_width()
         height = self.banner.winfo_height()
@@ -1924,6 +1963,9 @@ class ExbootApp(tk.Tk):
                     while chunk := src.read(1024 * 1024):
                         dst.write(chunk)
 
+            self.verify_boot_files(usb_drive)
+            self.log("Verified Windows UEFI boot files.")
+
             if bypass_checks:
                 self.apply_labconfig_bypass(usb_drive)
 
@@ -1938,9 +1980,18 @@ class ExbootApp(tk.Tk):
                     handle.write(active_script)
                     active_path = handle.name
                 try:
-                    run_command(["diskpart.exe", "/s", active_path], check=False)
+                    active_result = run_command(
+                        ["diskpart.exe", "/s", active_path], check=False
+                    )
                 finally:
                     os.unlink(active_path)
+                if active_result.returncode != 0:
+                    raise RuntimeError(
+                        "Could not mark the USB partition active: "
+                        + (active_result.stdout + active_result.stderr).strip()
+                    )
+                self.install_bios_boot_code(iso_drive, usb_drive)
+                self.log("Installed legacy BIOS boot code.")
             self.log(f"Completed successfully using {mode}.")
             self.after(
                 0,
