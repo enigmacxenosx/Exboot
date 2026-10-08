@@ -638,15 +638,15 @@ class ExbootApp(tk.Tk):
     def verify_boot_files(usb_drive):
         """Verify the files required by Windows removable-media boot paths."""
         required = {
-            "Windows boot manager": os.path.join(usb_drive + "\\", "bootmgr"),
-            "Windows boot configuration": os.path.join(
-                usb_drive + "\\", "boot", "bcd"
-            ),
+            "Windows boot manager": os.path.join(usb_drive + "\", "bootmgr"),
+            "Windows boot configuration": os.path.join(usb_drive + "\", "boot", "bcd"),
             "UEFI x64 boot loader": os.path.join(
-                usb_drive + "\\", "efi", "boot", "bootx64.efi"
+                usb_drive + "\", "efi", "boot", "bootx64.efi"
             ),
         }
-        missing = [label for label, path in required.items() if not os.path.isfile(path)]
+        missing = [
+            label for label, path in required.items() if not os.path.isfile(path)
+        ]
         if missing:
             raise RuntimeError(
                 "The USB was copied, but it is missing required boot files: "
