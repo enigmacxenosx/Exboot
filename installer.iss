@@ -1,5 +1,5 @@
 #define MyAppName "Exboot"
-#define MyAppVersion "0.3.9"
+#define MyAppVersion "0.4.0"
 #define MyAppPublisher "Enosx Technologies"
 #define MyAppExeName "Exboot.exe"
 
