@@ -1,6 +1,7 @@
 import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -19,7 +20,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -130,11 +131,97 @@ class ExbootApp(tk.Tk):
         }
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
+        self.show_enosx_splash()
         self.refresh_disks()
         self.after(
             1200, lambda: self.check_for_updates(show_no_update=False, automatic=True)
         )
         self.after(AUTO_UPDATE_INTERVAL_MS, self.periodic_update_check)
+
+    def show_enosx_splash(self):
+        """Show the ENOSX AI-inspired splash while Exboot finishes loading."""
+        self.withdraw()
+        splash = tk.Toplevel(self)
+        self.splash = splash
+        splash.overrideredirect(True)
+        splash.configure(bg="#050505")
+        width, height = 620, 430
+        screen_width = splash.winfo_screenwidth()
+        screen_height = splash.winfo_screenheight()
+        splash.geometry(
+            f"{width}x{height}+{(screen_width - width) // 2}+{(screen_height - height) // 2}"
+        )
+        canvas = tk.Canvas(splash, bg="#050505", highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        center_x, center_y = width // 2, 165
+
+        glow_rings = []
+        for radius, color in ((145, "#062d38"), (112, "#08434c"), (82, "#0b6970")):
+            glow_rings.append(
+                canvas.create_oval(
+                    center_x - radius,
+                    center_y - radius,
+                    center_x + radius,
+                    center_y + radius,
+                    fill=color,
+                    outline="",
+                )
+            )
+        canvas.create_rectangle(
+            center_x - 78,
+            center_y - 78,
+            center_x + 78,
+            center_y + 78,
+            fill="#12262b",
+            outline="#5ceff6",
+            width=2,
+        )
+        canvas.create_text(
+            center_x,
+            center_y - 5,
+            text="EX",
+            fill="white",
+            font=("Segoe UI", 52, "bold"),
+        )
+        canvas.create_text(center_x, 292, text="from", fill="#7d8588", font=("Segoe UI", 10))
+        canvas.create_text(
+            center_x,
+            320,
+            text="Enosx Technologies",
+            fill="#ffffffcc",
+            font=("Segoe UI", 21),
+        )
+        canvas.create_text(
+            center_x,
+            350,
+            text="Exboot · Windows Bootable USB Creator",
+            fill="#8dbbd1",
+            font=("Segoe UI", 10),
+        )
+        canvas.create_rectangle(0, height - 4, width, height, fill="#15313c", outline="")
+        progress = canvas.create_rectangle(0, height - 4, 0, height, fill="#00f2ff", outline="")
+        started = time.monotonic()
+
+        def animate():
+            if not splash.winfo_exists():
+                return
+            elapsed = time.monotonic() - started
+            fraction = min(elapsed / 3.5, 1.0)
+            pulse = 0.5 + 0.5 * math.sin(elapsed * 2.1)
+            for index, item in enumerate(glow_rings):
+                red = int(6 + pulse * 7 + index * 2)
+                green = min(110 + index * 20 + int(pulse * 18), 210)
+                blue = min(125 + index * 22 + int(pulse * 18), 230)
+                canvas.itemconfigure(item, fill=f"#{red:02x}{green:02x}{blue:02x}")
+            canvas.coords(progress, 0, height - 4, int(width * fraction), height)
+            if fraction < 1.0:
+                splash.after(40, animate)
+            else:
+                splash.destroy()
+                self.deiconify()
+                self.lift()
+
+        splash.after(40, animate)
 
     def build_ui(self):
         outer = ttk.Frame(self, padding=(12, 12), style="TFrame")
