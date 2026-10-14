@@ -184,7 +184,9 @@ class ExbootApp(tk.Tk):
             fill="white",
             font=("Segoe UI", 52, "bold"),
         )
-        canvas.create_text(center_x, 292, text="from", fill="#7d8588", font=("Segoe UI", 10))
+        canvas.create_text(
+            center_x, 292, text="from", fill="#7d8588", font=("Segoe UI", 10)
+        )
         canvas.create_text(
             center_x,
             320,
@@ -199,8 +201,12 @@ class ExbootApp(tk.Tk):
             fill="#8dbbd1",
             font=("Segoe UI", 10),
         )
-        canvas.create_rectangle(0, height - 4, width, height, fill="#15313c", outline="")
-        progress = canvas.create_rectangle(0, height - 4, 0, height, fill="#00f2ff", outline="")
+        canvas.create_rectangle(
+            0, height - 4, width, height, fill="#15313c", outline=""
+        )
+        progress = canvas.create_rectangle(
+            0, height - 4, 0, height, fill="#00f2ff", outline=""
+        )
         started = time.monotonic()
 
         def animate():
