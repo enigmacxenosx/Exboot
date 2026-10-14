@@ -20,7 +20,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 APP_NAME = "Exboot"
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/enigmacxenosx/Exboot/releases/latest"
@@ -131,7 +131,8 @@ class ExbootApp(tk.Tk):
         }
         self.status = tk.StringVar(value="Ready")
         self.build_ui()
-        self.show_enosx_splash()
+        if "--smoke-test" not in sys.argv:
+            self.show_enosx_splash()
         self.refresh_disks()
         self.after(
             1200, lambda: self.check_for_updates(show_no_update=False, automatic=True)
